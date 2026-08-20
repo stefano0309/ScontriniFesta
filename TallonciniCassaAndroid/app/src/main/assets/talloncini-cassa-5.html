@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cassa — Talloncini</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1C1E22;
+    --panel: #262A30;
+    --panel-2: #2E333A;
+    --line: #3A3F47;
+    --text: #F0EDE6;
+    --text-dim: #9BA1AB;
+    --amber: #E3A008;
+    --amber-dim: #7A5A0E;
+    --teal: #4C9088;
+    --red: #C1523E;
+    --green: #4C9A5A;
+    --paper: #FDFCF6;
+    --paper-ink: #23262B;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overscroll-behavior: none;
+  }
+  button{ font-family:'Inter',sans-serif; cursor:pointer; border:none; }
+  input, select{ font-family:'Inter',sans-serif; }
+
+  /* ================= CASHIER VIEW ================= */
+  #cashierView{ display:flex; flex-direction:column; height:100vh; }
+
+  .cash-top{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+    flex-shrink:0;
+  }
+  .cash-top .biz{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.03em;
+    font-size: 18px; font-weight:700;
+  }
+  .cash-top .biz span{ color: var(--amber); }
+  .cash-top .ticketno{ font-family:'JetBrains Mono',monospace; color:var(--text-dim); font-size:12px; }
+  .admin-gear{
+    background: transparent; border:1px solid var(--line); color: var(--text-dim);
+    width:38px; height:38px; border-radius:8px; font-size:16px;
+  }
+  .admin-gear:hover{ border-color: var(--amber); color: var(--amber); }
+
+  .cash-body{ display:flex; flex:1; min-height:0; }
+  @media (max-width: 760px){ .cash-body{ flex-direction:column; } }
+
+  .dish-panel{ flex: 1.4; overflow-y:auto; padding: 14px; }
+  .order-panel{
+    flex: 1; min-width: 300px; max-width: 420px;
+    background: var(--panel); border-left:1px solid var(--line);
+    display:flex; flex-direction:column; padding: 14px;
+  }
+  @media (max-width: 760px){
+    .order-panel{ max-width:none; border-left:none; border-top:1px solid var(--line); }
+  }
+
+  .cat-block{ margin-bottom: 18px; }
+  .cat-block h3{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.05em;
+    font-size:13px; color:var(--text-dim); border-bottom:1px dashed var(--line);
+    padding-bottom:6px; margin: 0 0 10px 0;
+  }
+  .dish-grid{
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px;
+  }
+  .dish-btn{
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 10px; min-height: 74px; color: var(--text); text-align:left;
+    display:flex; flex-direction:column; justify-content:space-between; gap:6px;
+    font-size: 14px; font-weight:600;
+  }
+  .dish-btn:active{ background: var(--panel-2); border-color: var(--amber); transform: scale(0.98); }
+  .dish-btn .p{ color: var(--amber); font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; }
+
+  .order-panel h3{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:13px; letter-spacing:0.05em;
+    color: var(--amber); margin: 0 0 10px 0;
+  }
+  #orderLinesCashier{ flex:1; overflow-y:auto; }
+  .oline{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding: 10px 4px; border-bottom: 1px solid var(--line);
+  }
+  .oline .nm{ font-size:14px; }
+  .oline .nm .nt{ display:block; font-size:11px; color:var(--text-dim); font-style:italic; }
+  .qtystep{ display:flex; align-items:center; gap:6px; }
+  .qtystep button{
+    width:30px; height:30px; border-radius:6px; background: var(--panel-2); color:var(--text);
+    font-size:16px; border:1px solid var(--line);
+  }
+  .qtystep span{ min-width:20px; text-align:center; font-family:'JetBrains Mono',monospace; }
+  .rm-btn{ background:transparent; color:var(--red); font-size:12px; padding:4px 6px; }
+
+  .order-empty{ color: var(--text-dim); font-size:13px; font-style:italic; padding: 20px 0; text-align:center; }
+
+  .order-total-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 10px 4px; border-top: 2px solid var(--line); margin-top:6px;
+    font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:700;
+  }
+  .order-hint{ font-size:11.5px; color:var(--text-dim); margin: 6px 0 10px; min-height: 16px; }
+
+  #printOrderBtn{
+    width:100%; background: var(--amber); color:#23260C; font-weight:800;
+    font-size: 16px; padding: 16px; border-radius: 10px; margin-top:8px;
+  }
+  #printOrderBtn:disabled{ opacity:0.35; }
+  #printOrderBtn:active:not(:disabled){ transform: scale(0.98); }
+
+  #clearOrderCashierBtn{
+    width:100%; background:transparent; border:1px solid var(--line); color:var(--text-dim);
+    padding:10px; border-radius:8px; margin-top:8px; font-size:13px;
+  }
+
+  .flash-msg{
+    position: fixed; bottom: 20px; left:50%; transform: translateX(-50%);
+    background: var(--green); color:white; padding: 12px 20px; border-radius: 8px;
+    font-size:14px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.4);
+    z-index: 500; opacity:0; pointer-events:none; transition: opacity 0.2s ease;
+  }
+  .flash-msg.show{ opacity:1; }
+
+  /* ================= ADMIN LOGIN MODAL ================= */
+  #adminLoginOverlay{
+    position: fixed; inset:0; background: rgba(0,0,0,0.6);
+    display:none; align-items:center; justify-content:center; z-index: 600;
+  }
+  #adminLoginOverlay.show{ display:flex; }
+  .login-card{
+    background: var(--panel); border:1px solid var(--line); border-radius: 12px;
+    padding: 24px; width: 300px;
+  }
+  .login-card h3{ margin:0 0 14px; font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:15px; color:var(--amber); }
+  .login-card label{ font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px; }
+  .login-card input{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:9px 10px; font-size:14px; margin-bottom:12px;
+  }
+  .login-err{ color: var(--red); font-size:12px; min-height:16px; margin-bottom:6px; }
+  .login-actions{ display:flex; gap:8px; margin-top:4px; }
+  .login-actions button{ flex:1; padding:10px; border-radius:8px; font-weight:600; font-size:13px; }
+  .btn-amber{ background: var(--amber); color:#23260C; }
+  .btn-outline{ background:transparent; border:1px solid var(--line); color:var(--text-dim); }
+
+  /* ================= ADMIN VIEW ================= */
+  #adminView{ display:none; }
+  #adminView.show{ display:block; }
+  .admin-wrap{ max-width: 1100px; margin:0 auto; padding: 24px 20px 60px; }
+  .admin-top{
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom: 2px solid var(--line); padding-bottom:14px; margin-bottom:20px;
+  }
+  .admin-top h1{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.02em;
+    font-size:22px; margin:0;
+  }
+  .admin-top h1 span{ color:var(--amber); }
+  .back-btn{ background: var(--teal); color:#EAF5F3; padding:9px 14px; border-radius:8px; font-weight:600; font-size:13px; }
+
+  .tabs{ display:flex; gap:6px; margin-bottom: 18px; flex-wrap:wrap; }
+  .tab-btn{
+    background: var(--panel); border:1px solid var(--line); color:var(--text-dim);
+    padding: 9px 16px; border-radius:8px; font-size:13px; font-weight:600;
+  }
+  .tab-btn.active{ background: var(--amber); color:#23260C; border-color:var(--amber); }
+  .tab-pane{ display:none; }
+  .tab-pane.active{ display:block; }
+
+  .panel{ background: var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:18px; }
+  .panel h2{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.04em; font-size:14px;
+    color: var(--amber); margin:0 0 14px 0; display:flex; align-items:center; gap:8px;
+  }
+  .panel h2::before{ content:""; width:8px; height:8px; background:var(--amber); border-radius:2px; display:inline-block; }
+  .panel p.hint{ font-size:12px; color: var(--text-dim); margin-top:-6px; }
+  .panel code{ background: var(--panel-2); padding:1px 5px; border-radius:4px; }
+
+  label{ font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px; }
+  input[type=text], input[type=number], input[type=password], select{
+    width:100%; background: var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:6px; padding:9px 10px; font-size:14px; margin-bottom:10px;
+  }
+  .form-row{ display:grid; grid-template-columns: 2fr 1fr 1fr; gap:10px; }
+  @media (max-width:560px){ .form-row{ grid-template-columns:1fr; } }
+  .form-row-2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  @media (max-width:560px){ .form-row-2{ grid-template-columns:1fr; } }
+
+  .btn-teal{ background: var(--teal); color:#EAF5F3; padding:10px 14px; border-radius:6px; font-weight:600; font-size:13px; }
+  .btn-red{ background:transparent; color:var(--red); border:1px solid var(--red); padding:5px 9px; border-radius:6px; font-size:12px; }
+  .btn-block{ width:100%; }
+
+  .cat-group{ margin-bottom:14px; }
+  .cat-title{
+    font-family:'Oswald',sans-serif; font-size:12px; letter-spacing:0.06em; text-transform:uppercase;
+    color: var(--text-dim); border-bottom:1px dashed var(--line); padding-bottom:4px; margin-bottom:8px;
+  }
+  .dish-row{ display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-radius:6px; }
+  .dish-row:hover{ background: var(--panel-2); }
+  .dish-row .dp{ color:var(--amber); font-family:'JetBrains Mono',monospace; font-size:13px; margin-left:10px; }
+  .dish-actions{ display:flex; gap:6px; }
+  .dish-actions button{ padding:5px 9px; font-size:12px; }
+  .empty-hint{ color: var(--text-dim); font-size:13px; font-style:italic; padding:10px 0; }
+
+  .toggle-row{ display:flex; align-items:center; gap:8px; margin: 4px 0 14px; font-size:13px; color: var(--text-dim); }
+  .toggle-row input{ width:auto; margin:0; }
+
+  .info-box{
+    background: var(--panel-2); border-left:3px solid var(--amber); border-radius:6px;
+    padding: 12px 14px; font-size:13px; color: var(--text-dim); line-height:1.5; margin-top:10px;
+  }
+  .info-box code{ background: var(--bg); }
+  .status-line{ font-size:12px; color: var(--text-dim); margin-top:8px; min-height:16px; }
+
+  /* ================= PRINT AREA (multi-page) ================= */
+  #printArea{ visibility:hidden; position:absolute; top:0; left:0; width:0; height:0; overflow:hidden; }
+  .print-page{
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height:1.4;
+    background: var(--paper); color: var(--paper-ink); padding: 8px 12px 12px;
+  }
+  .print-page .p-head{ text-align:center; margin-bottom:4px; }
+  .print-page .p-head .biz{ font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:0.03em; }
+  .print-page .p-head .kind{ font-size:12px; font-weight:700; margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
+  .print-page .p-head .meta{ font-size:10.5px; color:#5b5b55; }
+  .print-page hr{ border:none; border-top:1px dashed #9c9a8f; margin:5px 0; }
+  .print-page .p-item{ font-size: 15px; font-weight:700; text-align:center; margin: 6px 0; }
+  .print-page .p-note{ font-size:11.5px; text-align:center; color:#66665f; font-style:italic; }
+  .print-page .line{ display:flex; justify-content:space-between; gap:8px; }
+  .print-page .line .l-note{ font-size:11px; padding-left:12px; color:#66665f; font-style:italic; }
+  .print-page .total{ display:flex; justify-content:space-between; font-weight:700; margin-top:6px; font-size:13.5px; }
+  .print-page .foot{ text-align:center; font-size:10.5px; color:#8a8a80; margin-top:10px; }
+  .print-page:not(:last-child){ page-break-after: always; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #printArea, #printArea *{ visibility: visible; }
+    #printArea{ position: static; width:auto; height:auto; overflow:visible; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ CASHIER VIEW ============ -->
+<div id="cashierView">
+  <div class="cash-top">
+    <div class="biz" id="bizNameLabel">Cassa <span>Ordini</span></div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="ticketno" id="nextTicketLabel">#0001</div>
+      <button class="admin-gear" id="openAdminBtn" title="Area amministrazione">⚙</button>
+    </div>
+  </div>
+
+  <div class="cash-body">
+    <div class="dish-panel">
+      <div id="dishGrid"><div class="empty-hint">Nessun piatto nel menu. Vai in Admin per aggiungerne.</div></div>
+    </div>
+
+    <div class="order-panel">
+      <h3>Ordine corrente</h3>
+      <div id="orderLinesCashier"><div class="order-empty">Tocca un piatto per aggiungerlo</div></div>
+      <div class="order-total-row" id="orderTotalRow" style="display:none;">
+        <span>Totale</span><span id="orderTotalVal">€ 0,00</span>
+      </div>
+      <div class="order-hint" id="orderHint"></div>
+      <button id="printOrderBtn" disabled>🖨 Invia e Stampa</button>
+      <button id="clearOrderCashierBtn">Svuota ordine</button>
+    </div>
+  </div>
+</div>
+
+<div id="flashMsg" class="flash-msg"></div>
+
+<!-- ============ ADMIN LOGIN ============ -->
+<div id="adminLoginOverlay">
+  <div class="login-card">
+    <h3>Accesso amministratore</h3>
+    <label>Utente</label>
+    <input type="text" id="loginUser" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="loginPass" autocomplete="current-password">
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-actions">
+      <button class="btn-outline" id="loginCancelBtn">Annulla</button>
+      <button class="btn-amber" id="loginSubmitBtn">Accedi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADMIN VIEW ============ -->
+<div id="adminView">
+  <div class="admin-wrap">
+    <div class="admin-top">
+      <h1>Area <span>Amministrazione</span></h1>
+      <button class="back-btn" id="backToCashierBtn">← Torna alla cassa</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="menuTab">Menu</button>
+      <button class="tab-btn" data-tab="csvTab">Importa CSV</button>
+      <button class="tab-btn" data-tab="closeTab">Chiusura Cassa</button>
+      <button class="tab-btn" data-tab="settingsTab">Impostazioni</button>
+    </div>
+
+    <!-- MENU TAB -->
+    <div class="tab-pane active" id="menuTab">
+      <div class="panel">
+        <h2>Aggiungi piatto al menu</h2>
+        <label>Tipo</label>
+        <select id="newDishType">
+          <option value="dish">Piatto singolo</option>
+          <option value="combo">Menu (gruppo di piatti)</option>
+        </select>
+        <div class="form-row">
+          <div>
+            <label id="newDishNameLabel">Nome piatto</label>
+            <input type="text" id="newDishName" placeholder="es. Tagliata di manzo">
+          </div>
+          <div>
+            <label>Prezzo (€)</label>
+            <input type="number" id="newDishPrice" placeholder="14.00" step="0.50" min="0">
+          </div>
+          <div>
+            <label>Categoria</label>
+            <input type="text" id="newDishCat" placeholder="es. Secondi" list="catList">
+            <datalist id="catList"></datalist>
+          </div>
+        </div>
+        <div id="comboItemsWrap" style="display:none; margin-bottom:10px;">
+          <label>Piatti inclusi nel menu (uno per talloncino separato)</label>
+          <div id="comboItemsList"></div>
+          <button type="button" class="btn-teal" id="addComboItemBtn" style="margin-top:4px;">+ Aggiungi piatto al gruppo</button>
+          <p class="hint" style="margin-top:8px;">Un "menu" viene sempre stampato come talloncini separati e non cumulativi, indipendentemente dalla categoria.</p>
+        </div>
+        <button class="btn-amber btn-block" id="addDishBtn">+ Aggiungi al menu</button>
+      </div>
+      <div class="panel">
+        <h2>Menu attuale</h2>
+        <div id="menuList"><div class="empty-hint">Nessun piatto ancora.</div></div>
+      </div>
+    </div>
+
+    <!-- CSV TAB -->
+    <div class="tab-pane" id="csvTab">
+      <div class="panel">
+        <h2>Importa menu da CSV</h2>
+        <p class="hint">Colonne attese: <code>nome,prezzo,categoria</code> (con o senza intestazione, rilevata da sola). Separatore <code>,</code> o <code>;</code>.</p>
+        <input type="file" id="csvFile" accept=".csv,text/csv" style="margin-bottom:10px; width:100%; color:var(--text-dim); font-size:13px;">
+        <div class="toggle-row">
+          <input type="checkbox" id="csvReplace">
+          <label style="margin:0;" for="csvReplace">Sostituisci il menu esistente invece di aggiungere</label>
+        </div>
+        <button class="btn-teal btn-block" id="importCsvBtn">⇪ Importa CSV</button>
+        <div class="status-line" id="csvStatus"></div>
+      </div>
+    </div>
+
+    <!-- CLOSE TAB -->
+    <div class="tab-pane" id="closeTab">
+      <div class="panel">
+        <h2>Chiusura cassa</h2>
+        <p class="hint">Riepilogo di tutti gli ordini inviati in stampa dall'ultima chiusura.</p>
+        <div id="closeSummary"><div class="empty-hint">Nessun ordine registrato dall'ultima chiusura.</div></div>
+        <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+          <button class="btn-teal" id="printCloseBtn" style="flex:1; min-width:160px;">🖨 Stampa riepilogo</button>
+          <button class="btn-red" id="resetCloseBtn" style="flex:1; min-width:160px; padding:10px 14px;">Chiudi cassa e azzera</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div class="tab-pane" id="settingsTab">
+      <div class="panel">
+        <h2>Attività e scontrino</h2>
+        <label>Nome attività (intestazione talloncini)</label>
+        <input type="text" id="setBizName" placeholder="es. Trattoria Da Mario">
+        <label>Messaggio di chiusura scontrino</label>
+        <input type="text" id="setFooter" placeholder="es. Grazie e arrivederci">
+        <label>Nota P.IVA / fiscale (facoltativa, sullo scontrino riepilogativo)</label>
+        <input type="text" id="setVat" placeholder="es. P.IVA 01234567890">
+        <label>Simbolo valuta</label>
+        <input type="text" id="setCurrency" placeholder="€" style="max-width:100px;">
+      </div>
+
+      <div class="panel">
+        <h2>Stampa</h2>
+        <label>Larghezza carta</label>
+        <select id="setPaperWidth">
+          <option value="58">58 mm</option>
+          <option value="80">80 mm</option>
+        </select>
+        <p class="hint" style="margin-bottom:10px;">L'altezza del talloncino si adatta sempre automaticamente al contenuto.</p>
+
+        <div class="toggle-row">
+          <input type="checkbox" id="setShowPricesKitchen">
+          <label style="margin:0;" for="setShowPricesKitchen">Mostra prezzi anche sui talloncini da cucina</label>
+        </div>
+        <div class="toggle-row">
+          <input type="checkbox" id="setAutoSummary" checked>
+          <label style="margin:0;" for="setAutoSummary">Includi sempre lo scontrino riepilogativo per il cliente</label>
+        </div>
+
+        <div class="info-box">
+          <b>Stampa a un tocco:</b> il pulsante "Invia e Stampa" genera in un solo lavoro di stampa tutti i talloncini per piatto più lo scontrino riepilogativo — vedrai quindi una sola finestra di conferma di sistema invece di una per talloncino.<br><br>
+          Su desktop, per eliminare del tutto quella finestra serve avviare Chrome con il parametro <code>--kiosk-printing</code>. Su Android questo flag non esiste: per una stampa senza alcuna finestra usa il metodo RawBT qui sotto.
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Talloncini per categoria</h2>
+        <p class="hint">Per ogni categoria del menu scegli come stampare più unità dello stesso piatto nello stesso ordine.<br>
+          <b>Cumulativo</b>: un solo talloncino con la quantità (es. "4x Pasta").<br>
+          <b>Non cumulativo</b>: un talloncino separato per ogni unità (es. 4 talloncini "1x Pasta").
+        </p>
+        <div id="categoryCumulativeList"><div class="empty-hint">Aggiungi piatti al menu per configurare le categorie.</div></div>
+      </div>
+
+      <div class="panel">
+        <h2>Metodo di stampa (Android / Bluetooth)</h2>
+        <label>Come inviare i talloncini alla stampante</label>
+        <select id="setPrintMethod">
+          <option value="dialog">Finestra di stampa di sistema (predefinito)</option>
+          <option value="rawbt">RawBT — invio diretto, senza finestre</option>
+        </select>
+
+        <div class="toggle-row">
+          <input type="checkbox" id="setRawbtCut">
+          <label style="margin:0;" for="setRawbtCut">La mia stampante ha il taglierino automatico (invia comando di taglio tra un talloncino e l'altro)</label>
+        </div>
+
+        <div class="info-box">
+          <b>RawBT è pensato esattamente per le termiche Bluetooth economiche da 58mm</b>, che quasi sempre usano Bluetooth Classic (non Bluetooth Low Energy) — un tipo di connessione che il browser da solo non può gestire.<br><br>
+          Impostazione (una tantum):
+          <ol style="margin:8px 0 0 18px; padding:0;">
+            <li>Installa <b>RawBT Print Service</b> dal Play Store.</li>
+            <li>Apri RawBT, vai su "Stampanti" e abbina la tua stampante Bluetooth.</li>
+            <li>In RawBT imposta la larghezza carta su <b>58mm</b> (menu impostazioni stampante).</li>
+            <li>Torna qui, seleziona "RawBT" sopra e salva.</li>
+          </ol>
+          Da quel momento il tasto "Invia e Stampa" manderà i talloncini direttamente a RawBT, che li stampa senza mostrare alcuna finestra Android.<br><br>
+          Nota: con RawBT i caratteri accentati (à, è, ò...) vengono convertiti nell'equivalente senza accento, perché molte stampanti termiche economiche non supportano UTF-8.
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Contatore ordini</h2>
+        <p class="hint">Prossimo numero: <span id="counterPreview">#0001</span></p>
+        <button class="btn-red" id="resetCounterBtn" style="padding:9px 14px;">Reimposta contatore a #0001</button>
+      </div>
+
+      <div class="panel">
+        <h2>Credenziali amministratore</h2>
+        <div class="form-row-2">
+          <div>
+            <label>Nuovo utente</label>
+            <input type="text" id="setNewUser" placeholder="admin">
+          </div>
+          <div>
+            <label>Nuova password</label>
+            <input type="password" id="setNewPass" placeholder="••••••">
+          </div>
+        </div>
+        <button class="btn-teal" id="saveCredsBtn">Aggiorna credenziali</button>
+        <div class="status-line" id="credsStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Backup impostazioni</h2>
+        <p class="hint">Esporta menu, categorie e impostazioni in un file da tenere come copia o da trasferire su un altro tablet.</p>
+        <button class="btn-teal btn-block" id="exportSettingsBtn">⇩ Esporta impostazioni</button>
+        <div style="margin-top:12px;">
+          <label>Importa da file</label>
+          <input type="file" id="importSettingsFile" accept=".json,application/json" style="margin-bottom:10px; width:100%; color:var(--text-dim); font-size:13px;">
+          <button class="btn-amber btn-block" id="importSettingsBtn">⇧ Importa impostazioni</button>
+        </div>
+        <div class="status-line" id="backupStatus"></div>
+      </div>
+
+      <button class="btn-amber btn-block" id="saveSettingsBtn" style="padding:14px; font-size:15px;">Salva impostazioni</button>
+      <div class="status-line" id="settingsStatus" style="text-align:center;"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="printArea"></div>
+
+<script>
+let menu = [];
+let order = [];
+let ticketCounter = 1;
+let adminLoggedIn = false;
+let salesLog = [];
+
+let settings = {
+  bizName: 'La Mia Attività',
+  footer: 'Grazie e arrivederci',
+  vat: '',
+  currency: '€',
+  paperWidth: 58,
+  showPricesKitchen: false,
+  autoSummary: true,
+  printMethod: 'rawbt', // Android wrapper default; can be changed to system dialog in Impostazioni
+  rawbtCut: false,
+  categoryCumulative: {}
+};
+let creds = { username: 'admin', password: 'admin' };
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function uid(){ return 'd' + Math.random().toString(36).slice(2,9); }
+function flash(msg){
+  const el = document.getElementById('flashMsg');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(window._flashTimer);
+  window._flashTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ---------- LOAD / SAVE (localStorage: persistente sul dispositivo) ----------
+const LS_PREFIX = 'talloncini-cassa:';
+
+async function loadAll(){
+  try{ const m = localStorage.getItem(LS_PREFIX + 'menu-items'); menu = m ? JSON.parse(m) : []; }catch(e){ menu = []; }
+  try{ const c = localStorage.getItem(LS_PREFIX + 'ticket-counter'); ticketCounter = c ? JSON.parse(c) : 1; }catch(e){ ticketCounter = 1; }
+  try{
+    const s = localStorage.getItem(LS_PREFIX + 'app-settings');
+    if(s) settings = Object.assign(settings, JSON.parse(s));
+  }catch(e){ /* usa default */ }
+  try{
+    const cr = localStorage.getItem(LS_PREFIX + 'admin-creds');
+    if(cr) creds = JSON.parse(cr);
+  }catch(e){ /* usa default admin/admin */ }
+  try{
+    const sl = localStorage.getItem(LS_PREFIX + 'sales-log');
+    salesLog = sl ? JSON.parse(sl) : [];
+  }catch(e){ salesLog = []; }
+
+  renderCashier();
+  renderMenuAdmin();
+  renderDishSelectHelpers();
+  fillSettingsForm();
+}
+function saveMenu(){ try{ localStorage.setItem(LS_PREFIX + 'menu-items', JSON.stringify(menu)); }catch(e){ flash('Errore salvataggio: memoria piena o non disponibile'); } }
+function saveCounter(){ try{ localStorage.setItem(LS_PREFIX + 'ticket-counter', JSON.stringify(ticketCounter)); }catch(e){} }
+function saveSettings(){ try{ localStorage.setItem(LS_PREFIX + 'app-settings', JSON.stringify(settings)); }catch(e){ flash('Errore salvataggio impostazioni'); } }
+function saveCreds(){ try{ localStorage.setItem(LS_PREFIX + 'admin-creds', JSON.stringify(creds)); }catch(e){} }
+function saveSalesLog(){ try{ localStorage.setItem(LS_PREFIX + 'sales-log', JSON.stringify(salesLog)); }catch(e){ flash('Errore salvataggio riepilogo vendite'); } }
+
+function groupByCategory(items){
+  const groups = {};
+  items.forEach(i => {
+    const cat = i.cat && i.cat.trim() ? i.cat.trim() : 'Senza categoria';
+    if(!groups[cat]) groups[cat] = [];
+    groups[cat].push(i);
+  });
+  return groups;
+}
+
+// ================= CASHIER VIEW =================
+function renderCashier(){
+  document.getElementById('bizNameLabel').innerHTML = escapeHtml(settings.bizName) + ' <span>Ordini</span>';
+  document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
+
+  renderDishGrid();
+  renderOrderCashier();
+}
+
+function renderDishGrid(){
+  const el = document.getElementById('dishGrid');
+  if(menu.length === 0){
+    el.innerHTML = '<div class="empty-hint">Nessun piatto nel menu. Vai in Admin per aggiungerne.</div>';
+    return;
+  }
+  const groups = groupByCategory(menu);
+  let html = '';
+  Object.keys(groups).sort().forEach(cat => {
+    html += `<div class="cat-block"><h3>${escapeHtml(cat)}</h3><div class="dish-grid">`;
+    groups[cat].forEach(d => {
+      const comboLine = d.type === 'combo' ? `<span style="display:block; font-size:10.5px; color:var(--teal); font-weight:500; margin-top:2px;">${escapeHtml((d.items||[]).join(' · '))}</span>` : '';
+      html += `<button type="button" class="dish-btn" onclick="addToOrder('${d.id}')">
+        <span><span style="display:block;">${escapeHtml(d.name)}</span>${comboLine}</span>
+        <span class="p">${settings.currency} ${d.price.toFixed(2)}</span>
+      </button>`;
+    });
+    html += `</div></div>`;
+  });
+  el.innerHTML = html;
+}
+
+window.addToOrder = function(dishId){
+  const d = menu.find(x => x.id === dishId);
+  if(!d) return;
+  const existing = order.find(l => l.dishId === dishId && !l.note);
+  if(existing){ existing.qty += 1; }
+  else{ order.push({ dishId, name: d.name, price: d.price, qty: 1, note: '' }); }
+  renderOrderCashier();
+};
+
+window.changeQty = function(idx, delta){
+  order[idx].qty += delta;
+  if(order[idx].qty <= 0) order.splice(idx, 1);
+  renderOrderCashier();
+};
+window.removeOrderLine = function(idx){
+  order.splice(idx, 1);
+  renderOrderCashier();
+};
+
+function renderOrderCashier(){
+  const el = document.getElementById('orderLinesCashier');
+  const totalRow = document.getElementById('orderTotalRow');
+  const printBtn = document.getElementById('printOrderBtn');
+  const hint = document.getElementById('orderHint');
+
+  if(order.length === 0){
+    el.innerHTML = '<div class="order-empty">Tocca un piatto per aggiungerlo</div>';
+    totalRow.style.display = 'none';
+    printBtn.disabled = true;
+    hint.textContent = '';
+    return;
+  }
+
+  el.innerHTML = order.map((l, idx) => `
+    <div class="oline">
+      <div class="nm">${escapeHtml(l.name)}${l.note ? `<span class="nt">${escapeHtml(l.note)}</span>` : ''}</div>
+      <div class="qtystep">
+        <button type="button" onclick="changeQty(${idx},-1)">−</button>
+        <span>${l.qty}</span>
+        <button type="button" onclick="changeQty(${idx},1)">+</button>
+        <button type="button" class="rm-btn" onclick="removeOrderLine(${idx})">✕</button>
+      </div>
+    </div>
+  `).join('');
+
+  const total = order.reduce((s,l) => s + l.price*l.qty, 0);
+  totalRow.style.display = 'flex';
+  document.getElementById('orderTotalVal').textContent = settings.currency + ' ' + total.toFixed(2);
+  printBtn.disabled = false;
+
+  const nTickets = order.reduce((sum, l) => {
+    const cat = dishCategory(l.dishId);
+    return sum + (isCategoryCumulative(cat) ? 1 : l.qty);
+  }, 0);
+  const names = order.map(l => l.name).join(', ');
+  hint.textContent = `Verranno stampati ${nTickets} talloncini (${names})` + (settings.autoSummary ? ' + scontrino riepilogativo.' : '.');
+}
+
+document.getElementById('clearOrderCashierBtn').addEventListener('click', () => {
+  if(order.length === 0) return;
+  if(!confirm("Svuotare l'ordine corrente?")) return;
+  order = [];
+  renderOrderCashier();
+});
+
+function recordSale(orderNum, orderLines, now){
+  const total = orderLines.reduce((s,l) => s + l.price*l.qty, 0);
+  salesLog.push({
+    orderNum,
+    ts: now.toISOString(),
+    lines: orderLines.map(l => ({ name: l.name, qty: l.qty, price: l.price })),
+    total
+  });
+  saveSalesLog();
+}
+
+function aggregateSalesLog(){
+  const totals = {};
+  let grandTotal = 0;
+  salesLog.forEach(entry => {
+    entry.lines.forEach(l => {
+      if(!totals[l.name]) totals[l.name] = { qty: 0, revenue: 0 };
+      totals[l.name].qty += l.qty;
+      totals[l.name].revenue += l.price * l.qty;
+    });
+    grandTotal += entry.total;
+  });
+  return { totals, grandTotal, orders: salesLog.length };
+}
+
+function renderChiusuraCassa(){
+  const el = document.getElementById('closeSummary');
+  if(salesLog.length === 0){
+    el.innerHTML = '<div class="empty-hint">Nessun ordine registrato dall\'ultima chiusura.</div>';
+    return;
+  }
+  const { totals, grandTotal, orders } = aggregateSalesLog();
+  const rows = Object.keys(totals).sort().map(name => {
+    const t = totals[name];
+    return `<div class="dish-row"><div>${escapeHtml(name)} <span class="dp">x${t.qty}</span></div><div class="dp">${settings.currency} ${t.revenue.toFixed(2)}</div></div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="info-box" style="margin-bottom:14px;">
+      <b>${orders}</b> ordini registrati &middot; Incasso totale <b>${settings.currency} ${grandTotal.toFixed(2)}</b>
+    </div>
+    ${rows}
+  `;
+}
+
+function buildCloseSummaryHtmlPage(){
+  const { totals, grandTotal, orders } = aggregateSalesLog();
+  const now = new Date();
+  const rowsHtml = Object.keys(totals).sort().map(name => {
+    const t = totals[name];
+    return `<div class="line"><span>${escapeHtml(name)} x${t.qty}</span><span>${settings.currency} ${t.revenue.toFixed(2)}</span></div>`;
+  }).join('');
+  return `
+  <div class="print-page">
+    <div class="p-head">
+      <div class="biz">${escapeHtml(settings.bizName)}</div>
+      <div class="kind">Chiusura cassa</div>
+      <div class="meta">${now.toLocaleDateString('it-IT')} ${now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>
+    </div>
+    <hr>
+    <div class="p-note" style="margin-bottom:6px;">${orders} ordini</div>
+    ${rowsHtml}
+    <hr>
+    <div class="total"><span>Incasso totale</span><span>${settings.currency} ${grandTotal.toFixed(2)}</span></div>
+  </div>`;
+}
+
+function buildCloseSummaryEscPos(){
+  const { totals, grandTotal, orders } = aggregateSalesLog();
+  const now = new Date();
+  let out = '';
+  out += ESC + 'a' + '\x01';
+  out += ESC + 'E' + '\x01' + textForPrinter(settings.bizName) + '\n' + ESC + 'E' + '\x00';
+  out += 'CHIUSURA CASSA\n';
+  out += textForPrinter(now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})) + '\n';
+  out += P_LINE + '\n';
+  out += ESC + 'a' + '\x00';
+  out += textForPrinter(orders + ' ordini') + '\n';
+  Object.keys(totals).sort().forEach(name => {
+    const t = totals[name];
+    const left = textForPrinter(name + ' x' + t.qty);
+    const right = textForPrinter(settings.currency) + ' ' + t.revenue.toFixed(2);
+    const pad = Math.max(1, 32 - left.length - right.length);
+    out += left + ' '.repeat(pad) + right + '\n';
+  });
+  out += P_LINE + '\n';
+  out += ESC + 'E' + '\x01' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + grandTotal.toFixed(2) + ESC + 'E' + '\x00' + '\n';
+  out += '\n\n\n';
+  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  return out;
+}
+
+document.getElementById('printCloseBtn').addEventListener('click', () => {
+  if(salesLog.length === 0){ flash('Nessun ordine da riepilogare'); return; }
+  if(settings.printMethod === 'rawbt'){
+    sendViaRawBt(ESC + '@' + buildCloseSummaryEscPos());
+    flash('Riepilogo inviato a RawBT');
+  }else{
+    ensurePrintPageStyle();
+    document.getElementById('printArea').innerHTML = buildCloseSummaryHtmlPage();
+    window.print();
+    flash('Riepilogo generato');
+  }
+});
+
+document.getElementById('resetCloseBtn').addEventListener('click', async () => {
+  if(salesLog.length === 0){ flash('Nessun ordine da azzerare'); return; }
+  if(!confirm(`Chiudere la cassa e azzerare i ${salesLog.length} ordini registrati? L'operazione non è reversibile.`)) return;
+  salesLog = [];
+  await saveSalesLog();
+  renderChiusuraCassa();
+  flash('Cassa chiusa e azzerata');
+});
+
+// ---------- PRINTING ----------
+function dishCategory(dishId){
+  const d = menu.find(x => x.id === dishId);
+  return d && d.cat && d.cat.trim() ? d.cat.trim() : 'Senza categoria';
+}
+function isCategoryCumulative(cat){
+  return settings.categoryCumulative[cat] !== false; // default: cumulativo
+}
+
+function getKitchenTicketsList(){
+  let tickets = [];
+  order.forEach(l => {
+    const dish = menu.find(m => m.id === l.dishId);
+    if(dish && dish.type === 'combo'){
+      // un "menu" è sempre non cumulativo: talloncini separati per ogni piatto incluso, per ogni unità acquistata
+      for(let u = 0; u < l.qty; u++){
+        (dish.items || []).forEach(compName => {
+          tickets.push({ name: compName, qty: 1, note: l.note, price: 0, noPrice: true });
+        });
+      }
+    }else{
+      const cat = dishCategory(l.dishId);
+      if(isCategoryCumulative(cat)){
+        tickets.push({ name: l.name, qty: l.qty, note: l.note, price: l.price });
+      }else{
+        for(let i = 0; i < l.qty; i++){
+          tickets.push({ name: l.name, qty: 1, note: l.note, price: l.price });
+        }
+      }
+    }
+  });
+  return tickets;
+}
+
+function ticketMetaStr(orderNum, now){
+  const dateStr = now.toLocaleDateString('it-IT');
+  const timeStr = now.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  return '#' + String(orderNum).padStart(4,'0') + ' · ' + dateStr + ' ' + timeStr;
+}
+
+function renderKitchenPage(ticket, orderNum, now){
+  const priceLine = (settings.showPricesKitchen && !ticket.noPrice)
+    ? `<div class="line"><span>${ticket.qty}x ${escapeHtml(ticket.name)}</span><span>${settings.currency} ${(ticket.price*ticket.qty).toFixed(2)}</span></div>`
+    : '';
+  return `
+  <div class="print-page">
+    <div class="p-head">
+      <div class="meta">${ticketMetaStr(orderNum, now)}</div>
+    </div>
+    <hr>
+    ${priceLine}
+    <div class="p-item">${ticket.qty}x ${escapeHtml(ticket.name)}</div>
+    ${ticket.note ? `<div class="p-note">— ${escapeHtml(ticket.note)}</div>` : ''}
+  </div>`;
+}
+
+function renderSummaryPage(lines, orderNum, now){
+  const linesHtml = lines.map(l => `
+    <div class="line">
+      <span>${l.qty}x ${escapeHtml(l.name)}</span>
+      <span>${settings.currency} ${(l.price*l.qty).toFixed(2)}</span>
+    </div>
+    ${l.note ? `<div class="l-note">— ${escapeHtml(l.note)}</div>` : ''}
+  `).join('');
+  const total = lines.reduce((s,l) => s + l.price*l.qty, 0);
+  return `
+  <div class="print-page">
+    <div class="p-head">
+      <div class="biz">${escapeHtml(settings.bizName)}</div>
+      <div class="kind">Scontrino riepilogativo</div>
+      <div class="meta">${ticketMetaStr(orderNum, now)}</div>
+    </div>
+    <hr>
+    ${linesHtml}
+    <hr>
+    <div class="total"><span>Totale</span><span>${settings.currency} ${total.toFixed(2)}</span></div>
+    ${settings.vat ? `<div class="foot">${escapeHtml(settings.vat)}</div>` : ''}
+    <div class="foot">${escapeHtml(settings.footer)}</div>
+  </div>`;
+}
+
+// ---------- RAWBT / ESC-POS (stampa Bluetooth diretta, senza finestre) ----------
+const ACCENT_MAP = {
+  'à':'a','á':'a','â':'a','ä':'a','è':'e','é':'e','ê':'e','ë':'e',
+  'ì':'i','í':'i','î':'i','ï':'i','ò':'o','ó':'o','ô':'o','ö':'o',
+  'ù':'u','ú':'u','û':'u','ü':'u','ç':'c','ñ':'n',
+  'À':'A','Á':'A','È':'E','É':'E','Ì':'I','Ò':'O','Ù':'U','€':'EUR'
+};
+function textForPrinter(s){
+  let out = String(s).replace(/[àáâäèéêëìíîïòóôöùúûüçñÀÁÈÉÌÒÙ€]/g, ch => ACCENT_MAP[ch] || ch);
+  // scarta qualunque altro carattere non rappresentabile su una riga ESC/POS a 1 byte
+  out = out.split('').map(ch => ch.charCodeAt(0) > 255 ? '?' : ch).join('');
+  return out;
+}
+const ESC = '\x1B', GS = '\x1D';
+const P_LINE = '-'.repeat(32);
+
+function buildKitchenEscPos(ticket, orderNum, now){
+  let out = '';
+  out += ESC + 'a' + '\x01';                 // centrato
+  out += textForPrinter(ticketMetaStr(orderNum, now)) + '\n';
+  out += P_LINE + '\n';
+  out += GS + '!' + '\x11';                  // doppia altezza/larghezza
+  out += textForPrinter(ticket.qty + 'x ' + ticket.name) + '\n';
+  out += GS + '!' + '\x00';                  // dimensione normale
+  if(ticket.note) out += textForPrinter('- ' + ticket.note) + '\n';
+  out += ESC + 'a' + '\x00';                 // sinistra
+  out += '\n\n\n';
+  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  return out;
+}
+
+function buildSummaryEscPos(lines, orderNum, now){
+  let out = '';
+  out += ESC + 'a' + '\x01';
+  out += ESC + 'E' + '\x01' + textForPrinter(settings.bizName) + '\n' + ESC + 'E' + '\x00';
+  out += 'SCONTRINO RIEPILOGATIVO\n';
+  out += textForPrinter(ticketMetaStr(orderNum, now)) + '\n';
+  out += P_LINE + '\n';
+  out += ESC + 'a' + '\x00';
+  lines.forEach(l => {
+    const left = textForPrinter(l.qty + 'x ' + l.name);
+    const right = settings.currency.length <= 1 ? (textForPrinter(settings.currency) + (l.price*l.qty).toFixed(2)) : (l.price*l.qty).toFixed(2) + textForPrinter(settings.currency);
+    const pad = Math.max(1, 32 - left.length - right.length);
+    out += left + ' '.repeat(pad) + right + '\n';
+    if(l.note) out += '  - ' + textForPrinter(l.note) + '\n';
+  });
+  out += P_LINE + '\n';
+  const total = lines.reduce((s,l) => s + l.price*l.qty, 0);
+  out += ESC + 'E' + '\x01' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + total.toFixed(2) + ESC + 'E' + '\x00' + '\n';
+  out += ESC + 'a' + '\x01';
+  if(settings.vat) out += textForPrinter(settings.vat) + '\n';
+  out += textForPrinter(settings.footer) + '\n';
+  out += ESC + 'a' + '\x00';
+  out += '\n\n\n';
+  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  return out;
+}
+
+function sendViaRawBt(payload){
+  const b64 = btoa(payload);
+  window.location.href = 'rawbt:base64,' + b64;
+}
+
+function ensurePrintPageStyle(){
+  let styleEl = document.getElementById('dynamicPrintStyle');
+  if(!styleEl){
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamicPrintStyle';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent = `
+    .print-page{ width: ${settings.paperWidth}mm; }
+    @page{ size: ${settings.paperWidth}mm auto; margin: 3mm; }
+  `;
+}
+
+document.getElementById('printOrderBtn').addEventListener('click', async () => {
+  if(order.length === 0) return;
+  const now = new Date();
+  const orderNum = ticketCounter;
+
+  const kitchenTickets = getKitchenTicketsList();
+
+  if(settings.printMethod === 'rawbt'){
+    let payload = ESC + '@'; // init stampante
+    kitchenTickets.forEach(t => { payload += buildKitchenEscPos(t, orderNum, now); });
+    if(settings.autoSummary){
+      payload += buildSummaryEscPos(order, orderNum, now);
+    }
+    sendViaRawBt(payload);
+    flash('Talloncini inviati a RawBT');
+  }else{
+    let pagesHtml = kitchenTickets.map(t => renderKitchenPage(t, orderNum, now)).join('');
+    if(settings.autoSummary){
+      pagesHtml += renderSummaryPage(order, orderNum, now);
+    }
+    ensurePrintPageStyle();
+    document.getElementById('printArea').innerHTML = pagesHtml;
+    window.print();
+    flash('Ordine inviato e talloncini generati');
+  }
+
+  ticketCounter += 1;
+  await saveCounter();
+  recordSale(orderNum, order, now);
+  order = [];
+  renderOrderCashier();
+  document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
+});
+
+// ================= ADMIN LOGIN =================
+document.getElementById('openAdminBtn').addEventListener('click', () => {
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginErr').textContent = '';
+  document.getElementById('adminLoginOverlay').classList.add('show');
+  document.getElementById('loginUser').focus();
+});
+document.getElementById('loginCancelBtn').addEventListener('click', () => {
+  document.getElementById('adminLoginOverlay').classList.remove('show');
+});
+document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key === 'Enter') doLogin(); });
+
+function doLogin(){
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  if(u === creds.username && p === creds.password){
+    adminLoggedIn = true;
+    document.getElementById('adminLoginOverlay').classList.remove('show');
+    document.getElementById('cashierView').style.display = 'none';
+    document.getElementById('adminView').classList.add('show');
+  }else{
+    document.getElementById('loginErr').textContent = 'Utente o password non corretti.';
+  }
+}
+document.getElementById('backToCashierBtn').addEventListener('click', () => {
+  adminLoggedIn = false;
+  document.getElementById('adminView').classList.remove('show');
+  document.getElementById('cashierView').style.display = 'flex';
+  renderCashier();
+});
+
+// ---------- ADMIN TABS ----------
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'closeTab') renderChiusuraCassa();
+  });
+});
+
+// ---------- MENU ADMIN ----------
+function renderCategorySettings(){
+  const el = document.getElementById('categoryCumulativeList');
+  const cats = [...new Set(menu.map(d => d.cat && d.cat.trim() ? d.cat.trim() : 'Senza categoria'))].sort();
+  if(cats.length === 0){
+    el.innerHTML = '<div class="empty-hint">Aggiungi piatti al menu per configurare le categorie.</div>';
+    return;
+  }
+  el.innerHTML = cats.map(cat => {
+    const isCum = settings.categoryCumulative[cat] !== false;
+    return `<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line);">
+      <span style="font-size:14px;">${escapeHtml(cat)}</span>
+      <label style="display:flex; align-items:center; gap:6px; margin:0; font-size:12px; color:var(--text-dim); cursor:pointer;">
+        <input type="checkbox" class="cat-cum-toggle" data-cat="${escapeHtml(cat)}" ${isCum ? 'checked' : ''}>
+        Cumulativo
+      </label>
+    </div>`;
+  }).join('');
+}
+
+function renderMenuAdmin(){
+  const el = document.getElementById('menuList');
+  if(menu.length === 0){
+    el.innerHTML = '<div class="empty-hint">Nessun piatto ancora.</div>';
+    updateCatList();
+    renderCategorySettings();
+    return;
+  }
+  const groups = groupByCategory(menu);
+  let html = '';
+  Object.keys(groups).sort().forEach(cat => {
+    html += `<div class="cat-group"><div class="cat-title">${escapeHtml(cat)}</div>`;
+    groups[cat].forEach(d => {
+      const badge = d.type === 'combo' ? `<span style="color:var(--teal); font-size:11px; font-weight:700; margin-left:8px;">MENU · ${escapeHtml((d.items||[]).join(' + '))}</span>` : '';
+      html += `<div class="dish-row">
+        <div>${escapeHtml(d.name)}<span class="dp">€ ${d.price.toFixed(2)}</span>${badge}</div>
+        <div class="dish-actions">
+          <button class="btn-teal" onclick="editDish('${d.id}')">Modifica</button>
+          <button class="btn-red" onclick="deleteDish('${d.id}')">Elimina</button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  el.innerHTML = html;
+  updateCatList();
+  renderCategorySettings();
+}
+function updateCatList(){
+  const dl = document.getElementById('catList');
+  const cats = [...new Set(menu.map(d => d.cat && d.cat.trim() ? d.cat.trim() : 'Senza categoria'))];
+  dl.innerHTML = cats.map(c => `<option value="${escapeHtml(c)}">`).join('');
+}
+function renderDishSelectHelpers(){ updateCatList(); }
+
+// ---------- TIPO PIATTO / MENU (GRUPPO) ----------
+function addComboItemRow(value){
+  const wrap = document.getElementById('comboItemsList');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; gap:8px; margin-bottom:8px;';
+  row.innerHTML = `
+    <input type="text" class="combo-item-input" placeholder="es. Pizza margherita" style="flex:1; margin:0;" value="${escapeHtml(value || '')}">
+    <button type="button" class="btn-red" style="padding:0 12px;" onclick="this.parentElement.remove()">✕</button>
+  `;
+  wrap.appendChild(row);
+}
+
+document.getElementById('newDishType').addEventListener('change', (e) => {
+  const isCombo = e.target.value === 'combo';
+  document.getElementById('comboItemsWrap').style.display = isCombo ? 'block' : 'none';
+  document.getElementById('newDishNameLabel').textContent = isCombo ? 'Nome del menu (es. Menu Pizza)' : 'Nome piatto';
+  if(isCombo && document.getElementById('comboItemsList').children.length === 0){
+    addComboItemRow(''); addComboItemRow('');
+  }
+});
+document.getElementById('addComboItemBtn').addEventListener('click', () => addComboItemRow(''));
+
+document.getElementById('addDishBtn').addEventListener('click', async () => {
+  const type = document.getElementById('newDishType').value;
+  const name = document.getElementById('newDishName').value.trim();
+  const price = parseFloat(document.getElementById('newDishPrice').value);
+  const cat = document.getElementById('newDishCat').value.trim();
+  if(!name){ flash('Inserisci un nome'); return; }
+  if(isNaN(price) || price < 0){ flash('Inserisci un prezzo valido'); return; }
+
+  let items = [];
+  if(type === 'combo'){
+    items = Array.from(document.querySelectorAll('.combo-item-input'))
+      .map(i => i.value.trim()).filter(v => v !== '');
+    if(items.length < 2){ flash('Aggiungi almeno 2 piatti al gruppo'); return; }
+  }
+
+  menu.push({ id: uid(), name, price, cat, type, items });
+  document.getElementById('newDishName').value = '';
+  document.getElementById('newDishPrice').value = '';
+  document.getElementById('newDishCat').value = '';
+  document.getElementById('newDishType').value = 'dish';
+  document.getElementById('comboItemsWrap').style.display = 'none';
+  document.getElementById('comboItemsList').innerHTML = '';
+  document.getElementById('newDishNameLabel').textContent = 'Nome piatto';
+  await saveMenu();
+  renderMenuAdmin();
+  renderCashier();
+  flash(type === 'combo' ? 'Menu aggiunto' : 'Piatto aggiunto al menu');
+});
+
+window.editDish = async function(id){
+  const d = menu.find(x => x.id === id);
+  if(!d) return;
+  const newName = prompt('Nome:', d.name);
+  if(newName === null) return;
+  const newPriceStr = prompt('Prezzo (€):', d.price);
+  if(newPriceStr === null) return;
+  const newCat = prompt('Categoria:', d.cat || '');
+  if(newCat === null) return;
+  const newPrice = parseFloat(newPriceStr);
+  if(!newName.trim() || isNaN(newPrice) || newPrice < 0){ flash('Dati non validi, modifica annullata'); return; }
+  d.name = newName.trim(); d.price = newPrice; d.cat = newCat.trim();
+  if(d.type === 'combo'){
+    const itemsStr = prompt('Piatti inclusi nel menu (separati da virgola):', (d.items || []).join(', '));
+    if(itemsStr === null) return;
+    const items = itemsStr.split(',').map(s => s.trim()).filter(v => v !== '');
+    if(items.length < 2){ flash('Un menu deve avere almeno 2 piatti, modifica annullata'); return; }
+    d.items = items;
+  }
+  await saveMenu();
+  renderMenuAdmin();
+  renderCashier();
+  flash('Piatto aggiornato');
+};
+window.deleteDish = async function(id){
+  const d = menu.find(x => x.id === id);
+  if(!d) return;
+  if(!confirm(`Eliminare "${d.name}" dal menu?`)) return;
+  menu = menu.filter(x => x.id !== id);
+  await saveMenu();
+  renderMenuAdmin();
+  renderCashier();
+  flash('Piatto eliminato');
+};
+
+// ---------- CSV IMPORT ----------
+function detectDelimiter(sampleLine){
+  const commaCount = (sampleLine.match(/,/g) || []).length;
+  const semiCount = (sampleLine.match(/;/g) || []).length;
+  return semiCount > commaCount ? ';' : ',';
+}
+function parseCsvLine(line, delim){
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+  for(let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; }
+        else{ inQuotes = false; }
+      }else{ cur += ch; }
+    }else{
+      if(ch === '"'){ inQuotes = true; }
+      else if(ch === delim){ out.push(cur); cur = ''; }
+      else{ cur += ch; }
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+function parseCsvMenu(text){
+  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim() !== '');
+  if(lines.length === 0) return { items: [], errors: ['Il file è vuoto.'] };
+  const delim = detectDelimiter(lines[0]);
+  let rows = lines.map(l => parseCsvLine(l, delim));
+  const headerCandidates = ['nome','piatto','name','prezzo','price','categoria','category','cat'];
+  const firstRowLower = rows[0].map(c => c.toLowerCase());
+  const looksLikeHeader = firstRowLower.some(c => headerCandidates.includes(c));
+  let nameIdx = 0, priceIdx = 1, catIdx = 2;
+  if(looksLikeHeader){
+    nameIdx = firstRowLower.findIndex(c => ['nome','piatto','name'].includes(c));
+    priceIdx = firstRowLower.findIndex(c => ['prezzo','price'].includes(c));
+    catIdx = firstRowLower.findIndex(c => ['categoria','category','cat'].includes(c));
+    if(nameIdx === -1) nameIdx = 0;
+    if(priceIdx === -1) priceIdx = 1;
+    if(catIdx === -1) catIdx = 2;
+    rows = rows.slice(1);
+  }
+  const items = [];
+  const errors = [];
+  rows.forEach((row, idx) => {
+    const rowNum = idx + (looksLikeHeader ? 2 : 1);
+    const name = (row[nameIdx] || '').trim();
+    let priceRaw = (row[priceIdx] || '').trim();
+    const cat = (row[catIdx] || '').trim();
+    if(!name){ errors.push(`Riga ${rowNum}: nome mancante, saltata.`); return; }
+    priceRaw = priceRaw.replace(/[€\s]/g, '').replace(',', '.');
+    const price = parseFloat(priceRaw);
+    if(isNaN(price) || price < 0){ errors.push(`Riga ${rowNum}: prezzo non valido, saltata.`); return; }
+    items.push({ id: uid(), name, price, cat });
+  });
+  return { items, errors };
+}
+
+document.getElementById('importCsvBtn').addEventListener('click', () => {
+  const fileInput = document.getElementById('csvFile');
+  const statusEl = document.getElementById('csvStatus');
+  const file = fileInput.files[0];
+  if(!file){ statusEl.textContent = 'Seleziona prima un file CSV.'; statusEl.style.color = 'var(--red)'; return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const text = e.target.result;
+    const { items, errors } = parseCsvMenu(text);
+    if(items.length === 0){
+      statusEl.textContent = 'Nessun piatto valido trovato nel CSV. Controlla il formato.';
+      statusEl.style.color = 'var(--red)';
+      return;
+    }
+    const replace = document.getElementById('csvReplace').checked;
+    if(replace){
+      if(!confirm(`Sostituire l'intero menu con ${items.length} piatti importati?`)) return;
+      menu = items;
+    }else{
+      menu = menu.concat(items);
+    }
+    await saveMenu();
+    renderMenuAdmin();
+    renderCashier();
+    let msg = `Importati ${items.length} piatti.`;
+    if(errors.length > 0) msg += ` ${errors.length} righe saltate.`;
+    statusEl.textContent = msg;
+    statusEl.style.color = errors.length > 0 ? 'var(--amber)' : 'var(--green)';
+    if(errors.length > 0) console.warn('Errori import CSV:', errors);
+    fileInput.value = '';
+  };
+  reader.onerror = () => {
+    statusEl.textContent = 'Errore nella lettura del file.';
+    statusEl.style.color = 'var(--red)';
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+// ---------- SETTINGS ----------
+function fillSettingsForm(){
+  document.getElementById('setBizName').value = settings.bizName;
+  document.getElementById('setFooter').value = settings.footer;
+  document.getElementById('setVat').value = settings.vat;
+  document.getElementById('setCurrency').value = settings.currency;
+  document.getElementById('setPaperWidth').value = String(settings.paperWidth);
+  document.getElementById('setShowPricesKitchen').checked = settings.showPricesKitchen;
+  document.getElementById('setAutoSummary').checked = settings.autoSummary;
+  document.getElementById('setPrintMethod').value = settings.printMethod;
+  document.getElementById('setRawbtCut').checked = settings.rawbtCut;
+  document.getElementById('counterPreview').textContent = '#' + String(ticketCounter).padStart(4,'0');
+}
+
+document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+  settings.bizName = document.getElementById('setBizName').value.trim() || 'La Mia Attività';
+  settings.footer = document.getElementById('setFooter').value.trim() || 'Grazie e arrivederci';
+  settings.vat = document.getElementById('setVat').value.trim();
+  settings.currency = document.getElementById('setCurrency').value.trim() || '€';
+  settings.paperWidth = parseInt(document.getElementById('setPaperWidth').value) || 58;
+  settings.showPricesKitchen = document.getElementById('setShowPricesKitchen').checked;
+  settings.autoSummary = document.getElementById('setAutoSummary').checked;
+  document.querySelectorAll('.cat-cum-toggle').forEach(cb => {
+    settings.categoryCumulative[cb.dataset.cat] = cb.checked;
+  });
+  settings.printMethod = document.getElementById('setPrintMethod').value;
+  settings.rawbtCut = document.getElementById('setRawbtCut').checked;
+  await saveSettings();
+  renderCashier();
+  const st = document.getElementById('settingsStatus');
+  st.textContent = 'Impostazioni salvate.';
+  st.style.color = 'var(--green)';
+  setTimeout(() => st.textContent = '', 2500);
+});
+
+document.getElementById('resetCounterBtn').addEventListener('click', async () => {
+  if(!confirm('Reimpostare il contatore ordini a #0001?')) return;
+  ticketCounter = 1;
+  await saveCounter();
+  document.getElementById('counterPreview').textContent = '#0001';
+  document.getElementById('nextTicketLabel').textContent = '#0001';
+  flash('Contatore reimpostato');
+});
+
+document.getElementById('saveCredsBtn').addEventListener('click', async () => {
+  const u = document.getElementById('setNewUser').value.trim();
+  const p = document.getElementById('setNewPass').value;
+  const st = document.getElementById('credsStatus');
+  if(!u || !p){ st.textContent = 'Inserisci utente e password.'; st.style.color = 'var(--red)'; return; }
+  creds = { username: u, password: p };
+  await saveCreds();
+  document.getElementById('setNewUser').value = '';
+  document.getElementById('setNewPass').value = '';
+  st.textContent = 'Credenziali aggiornate.';
+  st.style.color = 'var(--green)';
+  setTimeout(() => st.textContent = '', 2500);
+});
+
+// ---------- EXPORT / IMPORT IMPOSTAZIONI ----------
+function exportSettings(){
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    app: 'talloncini-cassa',
+    version: 1,
+    menu,
+    settings,
+    creds
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `talloncini-cassa-impostazioni-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function importSettingsFromPayload(payload){
+  if(!payload || typeof payload !== 'object'){ throw new Error('File non valido'); }
+  if(Array.isArray(payload.menu)) menu = payload.menu;
+  if(payload.settings && typeof payload.settings === 'object'){
+    settings = Object.assign({ categoryCumulative: {} }, settings, payload.settings);
+  }
+  if(payload.creds && payload.creds.username && payload.creds.password){
+    creds = payload.creds;
+  }
+  await saveMenu();
+  await saveSettings();
+  await saveCreds();
+  renderMenuAdmin();
+  renderCashier();
+  fillSettingsForm();
+}
+
+document.getElementById('exportSettingsBtn').addEventListener('click', () => {
+  exportSettings();
+  const st = document.getElementById('backupStatus');
+  st.textContent = 'File esportato.';
+  st.style.color = 'var(--green)';
+  setTimeout(() => st.textContent = '', 2500);
+});
+
+document.getElementById('importSettingsBtn').addEventListener('click', () => {
+  const fileInput = document.getElementById('importSettingsFile');
+  const st = document.getElementById('backupStatus');
+  const file = fileInput.files[0];
+  if(!file){ st.textContent = 'Seleziona prima un file.'; st.style.color = 'var(--red)'; return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const payload = JSON.parse(e.target.result);
+      if(!confirm('Importare queste impostazioni? Menu, categorie, impostazioni di stampa e credenziali admin attuali verranno sovrascritti.')) return;
+      await importSettingsFromPayload(payload);
+      st.textContent = 'Impostazioni importate correttamente.';
+      st.style.color = 'var(--green)';
+      fileInput.value = '';
+    }catch(err){
+      st.textContent = 'File non valido o corrotto.';
+      st.style.color = 'var(--red)';
+    }
+  };
+  reader.onerror = () => {
+    st.textContent = 'Errore nella lettura del file.';
+    st.style.color = 'var(--red)';
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+loadAll();
+</script>
+</body>
+</html>
