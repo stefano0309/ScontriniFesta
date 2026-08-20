@@ -22,6 +22,21 @@
     --paper: #FDFCF6;
     --paper-ink: #23262B;
   }
+
+  body.light-theme {
+    --bg: #F4F1EA;
+    --panel: #FFFFFF;
+    --panel-2: #EAE7E0;
+    --line: #D1CDD2;
+    --text: #1C1E22;
+    --text-dim: #6B7280;
+    --amber: #D98E00;
+    --amber-dim: #996400;
+    --teal: #3B7A72;
+    --red: #B03E2B;
+    --green: #3A8247;
+  }
+
   *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html,body{ margin:0; padding:0; height:100%; }
   body{
@@ -30,6 +45,7 @@
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
     overscroll-behavior: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   button{ font-family:'Inter',sans-serif; cursor:pointer; border:none; }
   input, select{ font-family:'Inter',sans-serif; }
@@ -47,10 +63,11 @@
     font-size: 18px; font-weight:700;
   }
   .cash-top .biz span{ color: var(--amber); }
-  .cash-top .ticketno{ font-family:'JetBrains Mono',monospace; color:var(--text-dim); font-size:12px; }
+  .cash-top .ticketno{ font-family:'JetBrains Mono',monospace; color:var(--text-dim); font-size:13px; font-weight:700; }
   .admin-gear{
     background: transparent; border:1px solid var(--line); color: var(--text-dim);
     width:38px; height:38px; border-radius:8px; font-size:16px;
+    display:inline-flex; align-items:center; justify-content:center;
   }
   .admin-gear:hover{ border-color: var(--amber); color: var(--amber); }
 
@@ -234,13 +251,23 @@
   .print-page .p-head .biz{ font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:0.03em; }
   .print-page .p-head .kind{ font-size:12px; font-weight:700; margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
   .print-page .p-head .meta{ font-size:10.5px; color:#5b5b55; }
+  .print-page .p-head .big-ticket{
+    font-family: 'Oswald', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--paper-ink);
+    display: block;
+    margin: 2px 0 4px 0;
+  }
   .print-page hr{ border:none; border-top:1px dashed #9c9a8f; margin:5px 0; }
-  .print-page .p-item{ font-size: 15px; font-weight:700; text-align:center; margin: 6px 0; }
-  .print-page .p-note{ font-size:11.5px; text-align:center; color:#66665f; font-style:italic; }
+  .print-page .p-item{ font-size: 16px; font-weight:700; text-align:center; margin: 8px 0; }
+  .print-page .p-note{ font-size:12px; text-align:center; color:#555550; font-style:italic; }
   .print-page .line{ display:flex; justify-content:space-between; gap:8px; }
   .print-page .line .l-note{ font-size:11px; padding-left:12px; color:#66665f; font-style:italic; }
   .print-page .total{ display:flex; justify-content:space-between; font-weight:700; margin-top:6px; font-size:13.5px; }
   .print-page .foot{ text-align:center; font-size:10.5px; color:#8a8a80; margin-top:10px; }
+  .print-page .p-top-space{ height: 3cm; width: 100%; display: block; }
   .print-page:not(:last-child){ page-break-after: always; }
 
   @media print{
@@ -256,8 +283,9 @@
 <div id="cashierView">
   <div class="cash-top">
     <div class="biz" id="bizNameLabel">Cassa <span>Ordini</span></div>
-    <div style="display:flex; align-items:center; gap:12px;">
+    <div style="display:flex; align-items:center; gap:10px;">
       <div class="ticketno" id="nextTicketLabel">#0001</div>
+      <button class="admin-gear" id="themeToggleBtn" title="Cambia tema (Chiaro/Scuro)">🌓</button>
       <button class="admin-gear" id="openAdminBtn" title="Area amministrazione">⚙</button>
     </div>
   </div>
@@ -382,6 +410,15 @@
     <!-- SETTINGS TAB -->
     <div class="tab-pane" id="settingsTab">
       <div class="panel">
+        <h2>Aspetto dell'applicazione</h2>
+        <label>Tema grafico</label>
+        <select id="setThemeSelect">
+          <option value="dark">Tema Scuro (Default)</option>
+          <option value="light">Tema Chiaro</option>
+        </select>
+      </div>
+
+      <div class="panel">
         <h2>Attività e scontrino</h2>
         <label>Nome attività (intestazione talloncini)</label>
         <input type="text" id="setBizName" placeholder="es. Trattoria Da Mario">
@@ -418,10 +455,10 @@
       </div>
 
       <div class="panel">
-        <h2>Talloncini per categoria</h2>
-        <p class="hint">Per ogni categoria del menu scegli come stampare più unità dello stesso piatto nello stesso ordine.<br>
-          <b>Cumulativo</b>: un solo talloncino con la quantità (es. "4x Pasta").<br>
-          <b>Non cumulativo</b>: un talloncino separato per ogni unità (es. 4 talloncini "1x Pasta").
+        <h2>Opzioni per categoria</h2>
+        <p class="hint">Per ogni categoria del menu puoi impostare:<br>
+          <b>Cumulativo</b>: un solo talloncino con la quantità totale (es. "4x Pasta"). Se disattivato, stampa 4 talloncini singoli.<br>
+          <b>+3cm Sopra</b>: aggiunge 3cm di carta bianca sopra il talloncino prima dell'intestazione per facilitare la rimozione o l'aggancio in cucina.
         </p>
         <div id="categoryCumulativeList"><div class="empty-hint">Aggiungi piatti al menu per configurare le categorie.</div></div>
       </div>
@@ -504,6 +541,7 @@ let adminLoggedIn = false;
 let salesLog = [];
 
 let settings = {
+  theme: 'dark',
   bizName: 'La Mia Attività',
   footer: 'Grazie e arrivederci',
   vat: '',
@@ -511,9 +549,10 @@ let settings = {
   paperWidth: 58,
   showPricesKitchen: false,
   autoSummary: true,
-  printMethod: 'rawbt', // Android wrapper default; can be changed to system dialog in Impostazioni
+  printMethod: 'dialog',
   rawbtCut: false,
-  categoryCumulative: {}
+  categoryCumulative: {},
+  categoryTopSpace: {}
 };
 let creds = { username: 'admin', password: 'admin' };
 
@@ -529,7 +568,26 @@ function flash(msg){
   window._flashTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
-// ---------- LOAD / SAVE (localStorage: persistente sul dispositivo) ----------
+// ---------- THEME HANDLING ----------
+function applyTheme(themeName){
+  settings.theme = themeName || 'dark';
+  if(settings.theme === 'light'){
+    document.body.classList.add('light-theme');
+  } else {
+    document.body.classList.remove('light-theme');
+  }
+}
+
+function toggleTheme(){
+  const nextTheme = document.body.classList.contains('light-theme') ? 'dark' : 'light';
+  applyTheme(nextTheme);
+  saveSettings();
+  fillSettingsForm();
+}
+
+document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+
+// ---------- LOAD / SAVE ----------
 const LS_PREFIX = 'talloncini-cassa:';
 
 async function loadAll(){
@@ -548,6 +606,7 @@ async function loadAll(){
     salesLog = sl ? JSON.parse(sl) : [];
   }catch(e){ salesLog = []; }
 
+  applyTheme(settings.theme);
   renderCashier();
   renderMenuAdmin();
   renderDishSelectHelpers();
@@ -693,7 +752,7 @@ function aggregateSalesLog(){
 function renderChiusuraCassa(){
   const el = document.getElementById('closeSummary');
   if(salesLog.length === 0){
-    el.innerHTML = '<div class="empty-hint">Nessun ordine registrato dall\'ultima chiusura.</div>';
+    el.innerHTML = '<div class="empty-hint">Nessun ordine registrato dall'ultima chiusura.</div>';
     return;
   }
   const { totals, grandTotal, orders } = aggregateSalesLog();
@@ -735,24 +794,35 @@ function buildCloseSummaryEscPos(){
   const { totals, grandTotal, orders } = aggregateSalesLog();
   const now = new Date();
   let out = '';
-  out += ESC + 'a' + '\x01';
-  out += ESC + 'E' + '\x01' + textForPrinter(settings.bizName) + '\n' + ESC + 'E' + '\x00';
-  out += 'CHIUSURA CASSA\n';
-  out += textForPrinter(now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})) + '\n';
-  out += P_LINE + '\n';
-  out += ESC + 'a' + '\x00';
-  out += textForPrinter(orders + ' ordini') + '\n';
+  out += ESC + 'a' + '';
+  out += ESC + 'E' + '' + textForPrinter(settings.bizName) + '
+' + ESC + 'E' + ' ';
+  out += 'CHIUSURA CASSA
+';
+  out += textForPrinter(now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})) + '
+';
+  out += P_LINE + '
+';
+  out += ESC + 'a' + ' ';
+  out += textForPrinter(orders + ' ordini') + '
+';
   Object.keys(totals).sort().forEach(name => {
     const t = totals[name];
     const left = textForPrinter(name + ' x' + t.qty);
     const right = textForPrinter(settings.currency) + ' ' + t.revenue.toFixed(2);
     const pad = Math.max(1, 32 - left.length - right.length);
-    out += left + ' '.repeat(pad) + right + '\n';
+    out += left + ' '.repeat(pad) + right + '
+';
   });
-  out += P_LINE + '\n';
-  out += ESC + 'E' + '\x01' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + grandTotal.toFixed(2) + ESC + 'E' + '\x00' + '\n';
-  out += '\n\n\n';
-  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  out += P_LINE + '
+';
+  out += ESC + 'E' + '' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + grandTotal.toFixed(2) + ESC + 'E' + ' ' + '
+';
+  out += '
+
+
+';
+  if(settings.rawbtCut) out += GS + 'V' + '';
   return out;
 }
 
@@ -786,25 +856,30 @@ function dishCategory(dishId){
 function isCategoryCumulative(cat){
   return settings.categoryCumulative[cat] !== false; // default: cumulativo
 }
+function isCategoryTopSpace(cat){
+  return settings.categoryTopSpace[cat] === true; // default: false
+}
 
 function getKitchenTicketsList(){
   let tickets = [];
   order.forEach(l => {
     const dish = menu.find(m => m.id === l.dishId);
+    const cat = dishCategory(l.dishId);
+    const hasTopSpace = isCategoryTopSpace(cat);
+
     if(dish && dish.type === 'combo'){
       // un "menu" è sempre non cumulativo: talloncini separati per ogni piatto incluso, per ogni unità acquistata
       for(let u = 0; u < l.qty; u++){
         (dish.items || []).forEach(compName => {
-          tickets.push({ name: compName, qty: 1, note: l.note, price: 0, noPrice: true });
+          tickets.push({ name: compName, qty: 1, note: l.note, price: 0, noPrice: true, topSpace: hasTopSpace });
         });
       }
     }else{
-      const cat = dishCategory(l.dishId);
       if(isCategoryCumulative(cat)){
-        tickets.push({ name: l.name, qty: l.qty, note: l.note, price: l.price });
+        tickets.push({ name: l.name, qty: l.qty, note: l.note, price: l.price, topSpace: hasTopSpace });
       }else{
         for(let i = 0; i < l.qty; i++){
-          tickets.push({ name: l.name, qty: 1, note: l.note, price: l.price });
+          tickets.push({ name: l.name, qty: 1, note: l.note, price: l.price, topSpace: hasTopSpace });
         }
       }
     }
@@ -815,16 +890,19 @@ function getKitchenTicketsList(){
 function ticketMetaStr(orderNum, now){
   const dateStr = now.toLocaleDateString('it-IT');
   const timeStr = now.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-  return '#' + String(orderNum).padStart(4,'0') + ' · ' + dateStr + ' ' + timeStr;
+  return dateStr + ' ' + timeStr;
 }
 
 function renderKitchenPage(ticket, orderNum, now){
   const priceLine = (settings.showPricesKitchen && !ticket.noPrice)
     ? `<div class="line"><span>${ticket.qty}x ${escapeHtml(ticket.name)}</span><span>${settings.currency} ${(ticket.price*ticket.qty).toFixed(2)}</span></div>`
     : '';
+  const spaceBlock = ticket.topSpace ? `<div class="p-top-space"></div>` : '';
   return `
   <div class="print-page">
+    ${spaceBlock}
     <div class="p-head">
+      <span class="big-ticket">#${String(orderNum).padStart(4,'0')}</span>
       <div class="meta">${ticketMetaStr(orderNum, now)}</div>
     </div>
     <hr>
@@ -848,7 +926,7 @@ function renderSummaryPage(lines, orderNum, now){
     <div class="p-head">
       <div class="biz">${escapeHtml(settings.bizName)}</div>
       <div class="kind">Scontrino riepilogativo</div>
-      <div class="meta">${ticketMetaStr(orderNum, now)}</div>
+      <div class="meta">#${String(orderNum).padStart(4,'0')} · ${ticketMetaStr(orderNum, now)}</div>
     </div>
     <hr>
     ${linesHtml}
@@ -859,7 +937,7 @@ function renderSummaryPage(lines, orderNum, now){
   </div>`;
 }
 
-// ---------- RAWBT / ESC-POS (stampa Bluetooth diretta, senza finestre) ----------
+// ---------- RAWBT / ESC-POS (stampa Bluetooth diretta) ----------
 const ACCENT_MAP = {
   'à':'a','á':'a','â':'a','ä':'a','è':'e','é':'e','ê':'e','ë':'e',
   'ì':'i','í':'i','î':'i','ï':'i','ò':'o','ó':'o','ô':'o','ö':'o',
@@ -868,52 +946,86 @@ const ACCENT_MAP = {
 };
 function textForPrinter(s){
   let out = String(s).replace(/[àáâäèéêëìíîïòóôöùúûüçñÀÁÈÉÌÒÙ€]/g, ch => ACCENT_MAP[ch] || ch);
-  // scarta qualunque altro carattere non rappresentabile su una riga ESC/POS a 1 byte
   out = out.split('').map(ch => ch.charCodeAt(0) > 255 ? '?' : ch).join('');
   return out;
 }
-const ESC = '\x1B', GS = '\x1D';
+const ESC = '', GS = '';
 const P_LINE = '-'.repeat(32);
 
 function buildKitchenEscPos(ticket, orderNum, now){
   let out = '';
-  out += ESC + 'a' + '\x01';                 // centrato
-  out += textForPrinter(ticketMetaStr(orderNum, now)) + '\n';
-  out += P_LINE + '\n';
-  out += GS + '!' + '\x11';                  // doppia altezza/larghezza
-  out += textForPrinter(ticket.qty + 'x ' + ticket.name) + '\n';
-  out += GS + '!' + '\x00';                  // dimensione normale
-  if(ticket.note) out += textForPrinter('- ' + ticket.note) + '\n';
-  out += ESC + 'a' + '\x00';                 // sinistra
-  out += '\n\n\n';
-  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  if(ticket.topSpace){
+    out += '
+
+
+
+
+
+
+
+'; // ~3cm di carta bianca in ESC/POS
+  }
+  out += ESC + 'a' + '';                 // centrato
+  out += GS + '!' + '"';                  // ingrandimento triplo (3x alto x 3x largo) per numero scontrino
+  out += '#' + String(orderNum).padStart(4,'0') + '
+';
+  out += GS + '!' + ' ';                  // dimensione normale
+  out += textForPrinter(ticketMetaStr(orderNum, now)) + '
+';
+  out += P_LINE + '
+';
+  out += GS + '!' + '';                  // doppia altezza/larghezza per nome piatto
+  out += textForPrinter(ticket.qty + 'x ' + ticket.name) + '
+';
+  out += GS + '!' + ' ';                  // dimensione normale
+  if(ticket.note) out += textForPrinter('- ' + ticket.note) + '
+';
+  out += ESC + 'a' + ' ';                 // sinistra
+  out += '
+
+
+';
+  if(settings.rawbtCut) out += GS + 'V' + '';
   return out;
 }
 
 function buildSummaryEscPos(lines, orderNum, now){
   let out = '';
-  out += ESC + 'a' + '\x01';
-  out += ESC + 'E' + '\x01' + textForPrinter(settings.bizName) + '\n' + ESC + 'E' + '\x00';
-  out += 'SCONTRINO RIEPILOGATIVO\n';
-  out += textForPrinter(ticketMetaStr(orderNum, now)) + '\n';
-  out += P_LINE + '\n';
-  out += ESC + 'a' + '\x00';
+  out += ESC + 'a' + '';
+  out += ESC + 'E' + '' + textForPrinter(settings.bizName) + '
+' + ESC + 'E' + ' ';
+  out += 'SCONTRINO RIEPILOGATIVO
+';
+  out += textForPrinter('#' + String(orderNum).padStart(4,'0') + ' · ' + ticketMetaStr(orderNum, now)) + '
+';
+  out += P_LINE + '
+';
+  out += ESC + 'a' + ' ';
   lines.forEach(l => {
     const left = textForPrinter(l.qty + 'x ' + l.name);
     const right = settings.currency.length <= 1 ? (textForPrinter(settings.currency) + (l.price*l.qty).toFixed(2)) : (l.price*l.qty).toFixed(2) + textForPrinter(settings.currency);
     const pad = Math.max(1, 32 - left.length - right.length);
-    out += left + ' '.repeat(pad) + right + '\n';
-    if(l.note) out += '  - ' + textForPrinter(l.note) + '\n';
+    out += left + ' '.repeat(pad) + right + '
+';
+    if(l.note) out += '  - ' + textForPrinter(l.note) + '
+';
   });
-  out += P_LINE + '\n';
+  out += P_LINE + '
+';
   const total = lines.reduce((s,l) => s + l.price*l.qty, 0);
-  out += ESC + 'E' + '\x01' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + total.toFixed(2) + ESC + 'E' + '\x00' + '\n';
-  out += ESC + 'a' + '\x01';
-  if(settings.vat) out += textForPrinter(settings.vat) + '\n';
-  out += textForPrinter(settings.footer) + '\n';
-  out += ESC + 'a' + '\x00';
-  out += '\n\n\n';
-  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  out += ESC + 'E' + '' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + total.toFixed(2) + ESC + 'E' + ' ' + '
+';
+  out += ESC + 'a' + '';
+  if(settings.vat) out += textForPrinter(settings.vat) + '
+';
+  out += textForPrinter(settings.footer) + '
+';
+  out += ESC + 'a' + ' ';
+  out += '
+
+
+';
+  if(settings.rawbtCut) out += GS + 'V' + '';
   return out;
 }
 
@@ -1023,12 +1135,19 @@ function renderCategorySettings(){
   }
   el.innerHTML = cats.map(cat => {
     const isCum = settings.categoryCumulative[cat] !== false;
-    return `<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line);">
-      <span style="font-size:14px;">${escapeHtml(cat)}</span>
-      <label style="display:flex; align-items:center; gap:6px; margin:0; font-size:12px; color:var(--text-dim); cursor:pointer;">
-        <input type="checkbox" class="cat-cum-toggle" data-cat="${escapeHtml(cat)}" ${isCum ? 'checked' : ''}>
-        Cumulativo
-      </label>
+    const isTopSpace = settings.categoryTopSpace[cat] === true;
+    return `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; gap:8px;">
+      <span style="font-size:14px; font-weight:600;">${escapeHtml(cat)}</span>
+      <div style="display:flex; align-items:center; gap:16px;">
+        <label style="display:flex; align-items:center; gap:6px; margin:0; font-size:13px; color:var(--text); cursor:pointer;">
+          <input type="checkbox" class="cat-cum-toggle" data-cat="${escapeHtml(cat)}" ${isCum ? 'checked' : ''}>
+          Cumulativo
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; margin:0; font-size:13px; color:var(--text); cursor:pointer;">
+          <input type="checkbox" class="cat-topspace-toggle" data-cat="${escapeHtml(cat)}" ${isTopSpace ? 'checked' : ''}>
+          +3cm Carta Sopra
+        </label>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1181,7 +1300,9 @@ function parseCsvLine(line, delim){
   return out.map(s => s.trim());
 }
 function parseCsvMenu(text){
-  const lines = text.split(/\r\n|\n|\r/).filter(l => l.trim() !== '');
+  const lines = text.split(/
+|
+|/).filter(l => l.trim() !== '');
   if(lines.length === 0) return { items: [], errors: ['Il file è vuoto.'] };
   const delim = detectDelimiter(lines[0]);
   let rows = lines.map(l => parseCsvLine(l, delim));
@@ -1254,6 +1375,7 @@ document.getElementById('importCsvBtn').addEventListener('click', () => {
 
 // ---------- SETTINGS ----------
 function fillSettingsForm(){
+  document.getElementById('setThemeSelect').value = settings.theme || 'dark';
   document.getElementById('setBizName').value = settings.bizName;
   document.getElementById('setFooter').value = settings.footer;
   document.getElementById('setVat').value = settings.vat;
@@ -1266,7 +1388,13 @@ function fillSettingsForm(){
   document.getElementById('counterPreview').textContent = '#' + String(ticketCounter).padStart(4,'0');
 }
 
+document.getElementById('setThemeSelect').addEventListener('change', (e) => {
+  applyTheme(e.target.value);
+});
+
 document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+  settings.theme = document.getElementById('setThemeSelect').value;
+  applyTheme(settings.theme);
   settings.bizName = document.getElementById('setBizName').value.trim() || 'La Mia Attività';
   settings.footer = document.getElementById('setFooter').value.trim() || 'Grazie e arrivederci';
   settings.vat = document.getElementById('setVat').value.trim();
@@ -1274,9 +1402,14 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
   settings.paperWidth = parseInt(document.getElementById('setPaperWidth').value) || 58;
   settings.showPricesKitchen = document.getElementById('setShowPricesKitchen').checked;
   settings.autoSummary = document.getElementById('setAutoSummary').checked;
+  
   document.querySelectorAll('.cat-cum-toggle').forEach(cb => {
     settings.categoryCumulative[cb.dataset.cat] = cb.checked;
   });
+  document.querySelectorAll('.cat-topspace-toggle').forEach(cb => {
+    settings.categoryTopSpace[cb.dataset.cat] = cb.checked;
+  });
+
   settings.printMethod = document.getElementById('setPrintMethod').value;
   settings.rawbtCut = document.getElementById('setRawbtCut').checked;
   await saveSettings();
@@ -1336,7 +1469,7 @@ async function importSettingsFromPayload(payload){
   if(!payload || typeof payload !== 'object'){ throw new Error('File non valido'); }
   if(Array.isArray(payload.menu)) menu = payload.menu;
   if(payload.settings && typeof payload.settings === 'object'){
-    settings = Object.assign({ categoryCumulative: {} }, settings, payload.settings);
+    settings = Object.assign({ categoryCumulative: {}, categoryTopSpace: {} }, settings, payload.settings);
   }
   if(payload.creds && payload.creds.username && payload.creds.password){
     creds = payload.creds;
@@ -1344,6 +1477,7 @@ async function importSettingsFromPayload(payload){
   await saveMenu();
   await saveSettings();
   await saveCreds();
+  applyTheme(settings.theme);
   renderMenuAdmin();
   renderCashier();
   fillSettingsForm();
