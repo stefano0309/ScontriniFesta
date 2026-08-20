@@ -5,8 +5,6 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.Settings;
 import android.view.View;
 import android.webkit.DownloadListener;
 import android.webkit.ValueCallback;
@@ -17,19 +15,22 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URLDecoder;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
+    private static final int CREATE_FILE_REQUEST_CODE = 1002;
 
     private WebView webView;
 
     private ValueCallback<Uri[]> filePathCallback;
+
+    // Dati del file che l'utente vuole esportare
+    private byte[] pendingFileBytes;
+    private String pendingFileName;
+    private String pendingMimeType;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,7 +46,9 @@ public class MainActivity extends Activity {
 
         hideSystemUi();
 
-        webView.loadUrl("file:///android_asset/talloncini-cassa-5.html");
+        webView.loadUrl(
+                "file:///android_asset/talloncini-cassa-5.html"
+        );
     }
 
     private void setupWebView() {
@@ -65,13 +68,7 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
 
         /*
-         * IMPORT FILE
-         *
-         * Permette alla web app di usare:
-         *
-         * <input type="file">
-         *
-         * per importare CSV e JSON.
+         * IMPORTAZIONE CSV / JSON
          */
         webView.setWebChromeClient(new WebChromeClient() {
 
@@ -81,17 +78,21 @@ public class MainActivity extends Activity {
                     ValueCallback<Uri[]> filePathCallback,
                     FileChooserParams fileChooserParams) {
 
-                // Se esiste una richiesta precedente, la annulliamo.
                 if (MainActivity.this.filePathCallback != null) {
                     MainActivity.this.filePathCallback.onReceiveValue(null);
                 }
 
-                MainActivity.this.filePathCallback = filePathCallback;
+                MainActivity.this.filePathCallback =
+                        filePathCallback;
 
                 try {
-                    Intent intent = fileChooserParams.createIntent();
 
-                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    Intent intent =
+                            fileChooserParams.createIntent();
+
+                    intent.addCategory(
+                            Intent.CATEGORY_OPENABLE
+                    );
 
                     startActivityForResult(
                             intent,
@@ -104,7 +105,7 @@ public class MainActivity extends Activity {
 
                     Toast.makeText(
                             MainActivity.this,
-                            "Nessun gestore file disponibile sul dispositivo.",
+                            "Nessun gestore file disponibile.",
                             Toast.LENGTH_LONG
                     ).show();
 
@@ -116,7 +117,7 @@ public class MainActivity extends Activity {
         });
 
         /*
-         * LINK E RAWBT
+         * GESTIONE LINK E RAWBT
          */
         webView.setWebViewClient(new WebViewClient() {
 
@@ -125,7 +126,9 @@ public class MainActivity extends Activity {
                     WebView view,
                     WebResourceRequest request) {
 
-                return handleUrl(request.getUrl().toString());
+                return handleUrl(
+                        request.getUrl().toString()
+                );
             }
 
             @Override
@@ -139,37 +142,34 @@ public class MainActivity extends Activity {
 
         /*
          * DOWNLOAD
-         *
-         * Gestisce i file creati dalla web app con:
-         *
-         * Blob
-         * URL.createObjectURL()
-         * <a download="...">
-         *
-         * In particolare l'export JSON delle impostazioni.
          */
-        webView.setDownloadListener(new DownloadListener() {
+        webView.setDownloadListener(
+                new DownloadListener() {
 
-            @Override
-            public void onDownloadStart(
-                    String url,
-                    String userAgent,
-                    String contentDisposition,
-                    String mimeType,
-                    long contentLength) {
+                    @Override
+                    public void onDownloadStart(
+                            String url,
+                            String userAgent,
+                            String contentDisposition,
+                            String mimeType,
+                            long contentLength) {
 
-                handleDownload(
-                        url,
-                        contentDisposition,
-                        mimeType
-                );
-            }
-        });
+                        handleDownload(
+                                url,
+                                contentDisposition,
+                                mimeType
+                        );
+                    }
+                }
+        );
     }
 
-    /**
-     * Gestione dei collegamenti esterni.
+    /*
+     * ---------------------------------------------------------
+     * URL
+     * ---------------------------------------------------------
      */
+
     private boolean handleUrl(String url) {
 
         if (url == null) {
@@ -178,21 +178,16 @@ public class MainActivity extends Activity {
 
         /*
          * RAWBT
-         *
-         * La web app genera URL del tipo:
-         *
-         * rawbt:base64,...
-         *
-         * che devono essere passati all'app RawBT.
          */
         if (url.startsWith("rawbt:")) {
 
             try {
 
-                Intent intent = new Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse(url)
-                );
+                Intent intent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
 
                 startActivity(intent);
 
@@ -200,7 +195,7 @@ public class MainActivity extends Activity {
 
                 Toast.makeText(
                         this,
-                        "RawBT non è installato. Installa RawBT Print Service.",
+                        "RawBT non è installato.",
                         Toast.LENGTH_LONG
                 ).show();
             }
@@ -209,20 +204,18 @@ public class MainActivity extends Activity {
         }
 
         /*
-         * Link HTTP/HTTPS.
-         *
-         * Se la web app dovesse aprire un sito esterno,
-         * lo apriamo nel browser Android.
+         * Link esterni
          */
         if (url.startsWith("http://")
                 || url.startsWith("https://")) {
 
             try {
 
-                Intent intent = new Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse(url)
-                );
+                Intent intent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
 
                 startActivity(intent);
 
@@ -235,9 +228,12 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    /**
-     * Gestisce i file scaricati dalla WebView.
+    /*
+     * ---------------------------------------------------------
+     * DOWNLOAD
+     * ---------------------------------------------------------
      */
+
     private void handleDownload(
             String url,
             String contentDisposition,
@@ -245,20 +241,14 @@ public class MainActivity extends Activity {
 
         try {
 
-            String fileName = extractFileName(
-                    contentDisposition,
-                    mimeType
-            );
+            String fileName =
+                    extractFileName(
+                            contentDisposition,
+                            mimeType
+                    );
 
             /*
-             * Caso Blob:
-             *
-             * blob:https://...
-             *
-             * oppure blob:file://...
-             *
-             * La WebView può consegnarci direttamente il contenuto
-             * tramite URL.createObjectURL().
+             * Blob creato dalla web app.
              */
             if (url.startsWith("blob:")) {
 
@@ -272,7 +262,7 @@ public class MainActivity extends Activity {
             }
 
             /*
-             * Caso data URL.
+             * Data URL.
              */
             if (url.startsWith("data:")) {
 
@@ -286,15 +276,16 @@ public class MainActivity extends Activity {
             }
 
             /*
-             * Caso URL HTTP/HTTPS.
+             * URL normale.
              */
             if (url.startsWith("http://")
                     || url.startsWith("https://")) {
 
-                Intent intent = new Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse(url)
-                );
+                Intent intent =
+                        new Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(url)
+                        );
 
                 startActivity(intent);
 
@@ -303,7 +294,7 @@ public class MainActivity extends Activity {
 
             Toast.makeText(
                     this,
-                    "Impossibile salvare il file.",
+                    "Impossibile esportare il file.",
                     Toast.LENGTH_LONG
             ).show();
 
@@ -311,15 +302,268 @@ public class MainActivity extends Activity {
 
             Toast.makeText(
                     this,
-                    "Errore durante l'esportazione del file.",
+                    "Errore durante l'esportazione.",
                     Toast.LENGTH_LONG
             ).show();
         }
     }
 
-    /**
-     * Estrae il nome del file.
+    /*
+     * ---------------------------------------------------------
+     * BLOB
+     * ---------------------------------------------------------
      */
+
+    private void saveBlobFile(
+            String blobUrl,
+            String fileName,
+            String mimeType) {
+
+        String safeUrl =
+                blobUrl
+                        .replace("\\", "\\\\")
+                        .replace("'", "\\'");
+
+        String script =
+                "(async function() {" +
+
+                "try {" +
+
+                " const response = await fetch('" +
+                safeUrl +
+                "');" +
+
+                " const blob = await response.blob();" +
+
+                " const reader = new FileReader();" +
+
+                " reader.onloadend = function() {" +
+
+                "   AndroidDownload.save(" +
+                "      reader.result," +
+                "      '" +
+                escapeJs(fileName) +
+                "'," +
+                "      '" +
+                escapeJs(mimeType) +
+                "'" +
+                "   );" +
+
+                " };" +
+
+                " reader.readAsDataURL(blob);" +
+
+                "} catch(e) {" +
+
+                " AndroidDownload.error();" +
+
+                "}" +
+
+                "})()";
+
+        webView.addJavascriptInterface(
+                new AndroidDownloadInterface(),
+                "AndroidDownload"
+        );
+
+        webView.evaluateJavascript(
+                script,
+                null
+        );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * DATA URL
+     * ---------------------------------------------------------
+     */
+
+    private void saveDataUrl(
+            String dataUrl,
+            String fileName,
+            String mimeType) {
+
+        try {
+
+            int commaIndex =
+                    dataUrl.indexOf(',');
+
+            if (commaIndex == -1) {
+                throw new Exception(
+                        "Data URL non valido"
+                );
+            }
+
+            String header =
+                    dataUrl.substring(
+                            0,
+                            commaIndex
+                    );
+
+            String data =
+                    dataUrl.substring(
+                            commaIndex + 1
+                    );
+
+            byte[] bytes;
+
+            if (header.contains(";base64")) {
+
+                bytes =
+                        android.util.Base64.decode(
+                                data,
+                                android.util.Base64.DEFAULT
+                        );
+
+            } else {
+
+                String decoded =
+                        java.net.URLDecoder.decode(
+                                data,
+                                "UTF-8"
+                        );
+
+                bytes =
+                        decoded.getBytes(
+                                StandardCharsets.UTF_8
+                        );
+            }
+
+            /*
+             * NON salviamo direttamente nel filesystem.
+             *
+             * Apriamo il selettore Android:
+             *
+             * "Salva con nome"
+             */
+            openSaveDialog(
+                    bytes,
+                    fileName,
+                    mimeType
+            );
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Errore durante la preparazione del file.",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * SALVA CON NOME ANDROID
+     * ---------------------------------------------------------
+     */
+
+    private void openSaveDialog(
+            byte[] bytes,
+            String fileName,
+            String mimeType) {
+
+        pendingFileBytes = bytes;
+        pendingFileName = fileName;
+        pendingMimeType =
+                mimeType != null
+                        ? mimeType
+                        : "application/octet-stream";
+
+        Intent intent =
+                new Intent(
+                        Intent.ACTION_CREATE_DOCUMENT
+                );
+
+        intent.addCategory(
+                Intent.CATEGORY_OPENABLE
+        );
+
+        intent.setType(
+                pendingMimeType
+        );
+
+        intent.putExtra(
+                Intent.EXTRA_TITLE,
+                pendingFileName
+        );
+
+        try {
+
+            startActivityForResult(
+                    intent,
+                    CREATE_FILE_REQUEST_CODE
+            );
+
+        } catch (ActivityNotFoundException e) {
+
+            Toast.makeText(
+                    this,
+                    "Il dispositivo non supporta il salvataggio dei file.",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * SALVATAGGIO NELLA POSIZIONE SCELTA
+     * ---------------------------------------------------------
+     */
+
+    private void saveToUri(Uri uri) {
+
+        if (uri == null || pendingFileBytes == null) {
+            return;
+        }
+
+        try {
+
+            OutputStream outputStream =
+                    getContentResolver()
+                            .openOutputStream(uri);
+
+            if (outputStream == null) {
+                throw new Exception(
+                        "Impossibile aprire il file."
+                );
+            }
+
+            outputStream.write(
+                    pendingFileBytes
+            );
+
+            outputStream.flush();
+            outputStream.close();
+
+            Toast.makeText(
+                    this,
+                    "Impostazioni esportate correttamente.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    this,
+                    "Errore nel salvataggio del file.",
+                    Toast.LENGTH_LONG
+            ).show();
+
+        } finally {
+
+            pendingFileBytes = null;
+            pendingFileName = null;
+            pendingMimeType = null;
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * FILE NAME
+     * ---------------------------------------------------------
+     */
+
     private String extractFileName(
             String contentDisposition,
             String mimeType) {
@@ -336,9 +580,15 @@ public class MainActivity extends Activity {
                 if (part.startsWith("filename=")) {
 
                     String name =
-                            part.substring("filename=".length());
+                            part.substring(
+                                    "filename=".length()
+                            );
 
-                    name = name.replace("\"", "");
+                    name =
+                            name.replace(
+                                    "\"",
+                                    ""
+                            );
 
                     if (!name.isEmpty()) {
                         return name;
@@ -350,131 +600,24 @@ public class MainActivity extends Activity {
         if (mimeType != null
                 && mimeType.contains("json")) {
 
-            return "talloncini-cassa-export.json";
+            return "talloncini-cassa-impostazioni.json";
         }
 
         if (mimeType != null
                 && mimeType.contains("csv")) {
 
-            return "talloncini-cassa-export.csv";
+            return "talloncini-cassa.csv";
         }
 
         return "talloncini-cassa-export";
     }
 
-    /**
-     * Salva un Blob creato dalla pagina.
-     *
-     * La WebView non permette direttamente di leggere un blob:
-     * per questo utilizziamo JavaScript per recuperare il contenuto
-     * e lo passiamo all'app.
+    /*
+     * ---------------------------------------------------------
+     * JAVASCRIPT BRIDGE
+     * ---------------------------------------------------------
      */
-    private void saveBlobFile(
-            String blobUrl,
-            String fileName,
-            String mimeType) {
 
-        String safeUrl = blobUrl
-                .replace("\\", "\\\\")
-                .replace("'", "\\'");
-
-        String script =
-                "(async function() {" +
-                "try {" +
-                " const response = await fetch('" + safeUrl + "');" +
-                " const blob = await response.blob();" +
-                " const reader = new FileReader();" +
-                " reader.onloadend = function() {" +
-                "   AndroidDownload.save(" +
-                "      reader.result," +
-                "      '" + escapeJs(fileName) + "'," +
-                "      '" + escapeJs(mimeType) + "'" +
-                "   );" +
-                " };" +
-                " reader.readAsDataURL(blob);" +
-                "} catch(e) {" +
-                " AndroidDownload.error();" +
-                "}" +
-                "})()";
-
-        webView.addJavascriptInterface(
-                new AndroidDownloadInterface(),
-                "AndroidDownload"
-        );
-
-        webView.evaluateJavascript(
-                script,
-                null
-        );
-    }
-
-    /**
-     * Gestisce un data URL.
-     */
-    private void saveDataUrl(
-            String dataUrl,
-            String fileName,
-            String mimeType) {
-
-        try {
-
-            int commaIndex = dataUrl.indexOf(',');
-
-            if (commaIndex == -1) {
-                throw new IOException("Data URL non valido");
-            }
-
-            String data =
-                    dataUrl.substring(commaIndex + 1);
-
-            boolean base64 =
-                    dataUrl.substring(0, commaIndex)
-                            .contains(";base64");
-
-            byte[] bytes;
-
-            if (base64) {
-
-                bytes =
-                        android.util.Base64.decode(
-                                data,
-                                android.util.Base64.DEFAULT
-                        );
-
-            } else {
-
-                String decoded =
-                        URLDecoder.decode(
-                                data,
-                                "UTF-8"
-                        );
-
-                bytes =
-                        decoded.getBytes(
-                                java.nio.charset.StandardCharsets.UTF_8
-                        );
-            }
-
-            saveBytesToDownloads(
-                    bytes,
-                    fileName,
-                    mimeType
-            );
-
-        } catch (Exception e) {
-
-            Toast.makeText(
-                    this,
-                    "Errore durante il salvataggio.",
-                    Toast.LENGTH_LONG
-            ).show();
-        }
-    }
-
-    /**
-     * Interfaccia JavaScript usata per trasferire il Blob
-     * dalla WebView ad Android.
-     */
     private class AndroidDownloadInterface {
 
         @android.webkit.JavascriptInterface
@@ -497,6 +640,7 @@ public class MainActivity extends Activity {
         public void error() {
 
             runOnUiThread(() ->
+
                     Toast.makeText(
                             MainActivity.this,
                             "Errore durante l'esportazione.",
@@ -506,57 +650,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    /**
-     * Salva i byte nella cartella Download.
+    /*
+     * ---------------------------------------------------------
+     * FILE PICKER RESULT
+     * ---------------------------------------------------------
      */
-    private void saveBytesToDownloads(
-            byte[] bytes,
-            String fileName,
-            String mimeType) {
 
-        try {
-
-            File downloads =
-                    Environment.getExternalStoragePublicDirectory(
-                            Environment.DIRECTORY_DOWNLOADS
-                    );
-
-            if (!downloads.exists()) {
-                downloads.mkdirs();
-            }
-
-            File file =
-                    new File(
-                            downloads,
-                            fileName
-                    );
-
-            FileOutputStream output =
-                    new FileOutputStream(file);
-
-            output.write(bytes);
-            output.flush();
-            output.close();
-
-            Toast.makeText(
-                    this,
-                    "File salvato in Download:\n" + fileName,
-                    Toast.LENGTH_LONG
-            ).show();
-
-        } catch (Exception e) {
-
-            Toast.makeText(
-                    this,
-                    "Errore nel salvataggio: " + e.getMessage(),
-                    Toast.LENGTH_LONG
-            ).show();
-        }
-    }
-
-    /**
-     * Ricezione del risultato del selettore file Android.
-     */
     @Override
     protected void onActivityResult(
             int requestCode,
@@ -569,36 +668,73 @@ public class MainActivity extends Activity {
                 data
         );
 
-        if (requestCode != FILE_CHOOSER_REQUEST_CODE) {
-            return;
-        }
+        /*
+         * IMPORT CSV / JSON
+         */
+        if (requestCode ==
+                FILE_CHOOSER_REQUEST_CODE) {
 
-        if (filePathCallback == null) {
-            return;
-        }
+            if (filePathCallback == null) {
+                return;
+            }
 
-        Uri[] results = null;
+            Uri[] results = null;
 
-        if (resultCode == RESULT_OK) {
+            if (resultCode == RESULT_OK
+                    && data != null) {
 
-            if (data != null) {
-
-                Uri uri = data.getData();
+                Uri uri =
+                        data.getData();
 
                 if (uri != null) {
-                    results = new Uri[]{uri};
+                    results =
+                            new Uri[]{uri};
                 }
             }
+
+            filePathCallback
+                    .onReceiveValue(results);
+
+            filePathCallback = null;
+
+            return;
         }
 
-        filePathCallback.onReceiveValue(results);
+        /*
+         * EXPORT
+         */
+        if (requestCode ==
+                CREATE_FILE_REQUEST_CODE) {
 
-        filePathCallback = null;
+            if (resultCode == RESULT_OK
+                    && data != null) {
+
+                Uri uri =
+                        data.getData();
+
+                saveToUri(uri);
+
+            } else {
+
+                pendingFileBytes = null;
+                pendingFileName = null;
+                pendingMimeType = null;
+
+                Toast.makeText(
+                        this,
+                        "Esportazione annullata.",
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+        }
     }
 
-    /**
-     * Escape per stringhe JavaScript.
+    /*
+     * ---------------------------------------------------------
+     * JAVASCRIPT ESCAPE
+     * ---------------------------------------------------------
      */
+
     private String escapeJs(String value) {
 
         if (value == null) {
@@ -612,9 +748,12 @@ public class MainActivity extends Activity {
                 .replace("\r", "\\r");
     }
 
-    /**
-     * Modalità fullscreen.
+    /*
+     * ---------------------------------------------------------
+     * FULLSCREEN
+     * ---------------------------------------------------------
      */
+
     private void hideSystemUi() {
 
         getWindow()
@@ -638,12 +777,12 @@ public class MainActivity extends Activity {
         hideSystemUi();
     }
 
-    /**
-     * Tasto indietro:
-     *
-     * se la WebView ha una cronologia, torna indietro;
-     * altrimenti chiude l'app.
+    /*
+     * ---------------------------------------------------------
+     * BACK
+     * ---------------------------------------------------------
      */
+
     @Override
     public void onBackPressed() {
 
