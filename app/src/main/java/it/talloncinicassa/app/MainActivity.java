@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.DownloadListener;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -32,6 +33,15 @@ public class MainActivity extends Activity {
     private String pendingFileName;
     private String pendingMimeType;
 
+    // Timestamp dell'ultima pressione del tasto "indietro", usato per capire
+    // se l'utente vuole davvero uscire dall'app (doppia pressione) invece di
+    // uscire per sbaglio mentre lavora in cassa.
+    private long lastBackPressTime = 0;
+    private static final long BACK_PRESS_EXIT_WINDOW_MS = 2000;
+
+    private static final String ASSET_URL =
+            "file:///android_asset/talloncini-cassa-5.html";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,9 +56,7 @@ public class MainActivity extends Activity {
 
         hideSystemUi();
 
-        webView.loadUrl(
-                "file:///android_asset/talloncini-cassa-5.html"
-        );
+        webView.loadUrl(ASSET_URL);
     }
 
     private void setupWebView() {
@@ -66,6 +74,16 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
 
         settings.setMediaPlaybackRequiresUserGesture(false);
+
+        /*
+         * Bridge JS -> Android per il salvataggio dei file (blob/base64).
+         * Registrato una sola volta qui invece che ad ogni download, per
+         * evitare di ricrearlo inutilmente ogni volta che si esporta un file.
+         */
+        webView.addJavascriptInterface(
+                new AndroidDownloadInterface(),
+                "AndroidDownload"
+        );
 
         /*
          * IMPORTAZIONE CSV / JSON
@@ -138,6 +156,49 @@ public class MainActivity extends Activity {
 
                 return handleUrl(url);
             }
+
+            /*
+             * Se il processo di rendering del WebView va in crash (es. per
+             * memoria insufficiente su tablet economici), di default Android
+             * chiude l'intera app senza preavviso. Gestendo l'evento
+             * possiamo invece ricreare la pagina e continuare a lavorare,
+             * evitando la chiusura improvvisa richiesta di evitare.
+             */
+            @Override
+            public boolean onRenderProcessGone(
+                    WebView view,
+                    RenderProcessGoneDetail detail) {
+
+                Toast.makeText(
+                        MainActivity.this,
+                        "La pagina si è interrotta inaspettatamente, la sto ricaricando...",
+                        Toast.LENGTH_LONG
+                ).show();
+
+                if (webView != null) {
+
+                    if (webView.getParent()
+                            instanceof android.view.ViewGroup) {
+
+                        ((android.view.ViewGroup) webView.getParent())
+                                .removeView(webView);
+                    }
+
+                    webView.destroy();
+                }
+
+                webView = new WebView(MainActivity.this);
+                setContentView(webView);
+                setupWebView();
+                hideSystemUi();
+                webView.loadUrl(ASSET_URL);
+
+                /*
+                 * Ritornando true diciamo al sistema che abbiamo gestito noi
+                 * la situazione: l'app NON viene terminata.
+                 */
+                return true;
+            }
         });
 
         /*
@@ -191,6 +252,12 @@ public class MainActivity extends Activity {
 
                 startActivity(intent);
 
+                /*
+                 * Avvisiamo la webapp che l'intent è partito correttamente,
+                 * cosi' può considerare l'ordine come stampato e azzerarlo.
+                 */
+                notifyRawBtResult(true, null);
+
             } catch (ActivityNotFoundException e) {
 
                 Toast.makeText(
@@ -198,6 +265,14 @@ public class MainActivity extends Activity {
                         "RawBT non è installato.",
                         Toast.LENGTH_LONG
                 ).show();
+
+                /*
+                 * Fondamentale per non perdere l'ordine: se RawBT non è
+                 * disponibile la webapp NON deve azzerare l'ordine corrente
+                 * né incrementare il contatore, altrimenti l'ordine
+                 * scomparirebbe senza che nulla sia stato stampato.
+                 */
+                notifyRawBtResult(false, "RawBT non è installato.");
             }
 
             return true;
@@ -226,6 +301,35 @@ public class MainActivity extends Activity {
         }
 
         return false;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * RAWBT CALLBACK VERSO LA WEBAPP
+     * ---------------------------------------------------------
+     */
+
+    private void notifyRawBtResult(boolean ok, String message) {
+
+        if (webView == null) {
+            return;
+        }
+
+        String safeMessage =
+                message != null
+                        ? "'" + escapeJs(message) + "'"
+                        : "null";
+
+        String script =
+                "window.__rawbtResult && window.__rawbtResult("
+                        + (ok ? "true" : "false")
+                        + ", "
+                        + safeMessage
+                        + ");";
+
+        runOnUiThread(() ->
+                webView.evaluateJavascript(script, null)
+        );
     }
 
     /*
@@ -360,11 +464,6 @@ public class MainActivity extends Activity {
                 "}" +
 
                 "})()";
-
-        webView.addJavascriptInterface(
-                new AndroidDownloadInterface(),
-                "AndroidDownload"
-        );
 
         webView.evaluateJavascript(
                 script,
@@ -778,6 +877,23 @@ public class MainActivity extends Activity {
     }
 
     /*
+     * La modalità immersiva può essere annullata dal sistema (es. quando
+     * appare un dialogo, il selettore file, o si cambia app e si torna
+     * indietro). Riapplicandola quando la finestra riottiene il focus si
+     * evita che la barra di sistema resti visibile e rovini l'esperienza
+     * "da chiosco" della cassa.
+     */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+
+        super.onWindowFocusChanged(hasFocus);
+
+        if (hasFocus) {
+            hideSystemUi();
+        }
+    }
+
+    /*
      * ---------------------------------------------------------
      * BACK
      * ---------------------------------------------------------
@@ -791,9 +907,49 @@ public class MainActivity extends Activity {
 
             webView.goBack();
 
-        } else {
+            return;
+        }
+
+        /*
+         * Evita di uscire per sbaglio dall'app durante il lavoro in cassa:
+         * la prima pressione avvisa, solo una seconda pressione entro pochi
+         * secondi chiude davvero l'app.
+         */
+        long now = System.currentTimeMillis();
+
+        if (now - lastBackPressTime < BACK_PRESS_EXIT_WINDOW_MS) {
 
             super.onBackPressed();
+
+        } else {
+
+            lastBackPressTime = now;
+
+            Toast.makeText(
+                    this,
+                    "Premi di nuovo \"Indietro\" per uscire dall'app.",
+                    Toast.LENGTH_SHORT
+            ).show();
         }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * CLEANUP
+     * ---------------------------------------------------------
+     */
+
+    @Override
+    protected void onDestroy() {
+
+        if (webView != null) {
+
+            webView.setWebViewClient(null);
+            webView.setWebChromeClient(null);
+            webView.destroy();
+            webView = null;
+        }
+
+        super.onDestroy();
     }
 }

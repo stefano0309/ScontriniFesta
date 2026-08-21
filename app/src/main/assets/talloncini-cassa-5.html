@@ -136,8 +136,22 @@
     background: var(--green); color:white; padding: 12px 20px; border-radius: 8px;
     font-size:14px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.4);
     z-index: 500; opacity:0; pointer-events:none; transition: opacity 0.2s ease;
+    max-width: 90vw; text-align:center;
   }
   .flash-msg.show{ opacity:1; }
+  .flash-msg.err{ background: var(--red); }
+
+  /* Banner persistente per errori gravi (non si nasconde da solo) */
+  #dataWarningBanner{
+    display:none; position: fixed; top:0; left:0; right:0; z-index: 700;
+    background: var(--red); color:#fff; font-size:13px; font-weight:600;
+    padding: 10px 14px; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,0.4);
+  }
+  #dataWarningBanner.show{ display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+  #dataWarningBanner button{
+    background: rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.5);
+    padding: 4px 10px; border-radius:6px; font-size:12px; font-weight:600;
+  }
 
   /* ================= ADMIN LOGIN MODAL ================= */
   #adminLoginOverlay{
@@ -289,6 +303,10 @@
 </div>
 
 <div id="flashMsg" class="flash-msg"></div>
+<div id="dataWarningBanner">
+  <span id="dataWarningText">Attenzione: problema di salvataggio dati.</span>
+  <button type="button" id="dataWarningDismiss">Ho capito</button>
+</div>
 
 <!-- ============ ADMIN LOGIN ============ -->
 <div id="adminLoginOverlay">
@@ -537,44 +555,106 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function uid(){ return 'd' + Math.random().toString(36).slice(2,9); }
-function flash(msg){
+function flash(msg, isError){
   const el = document.getElementById('flashMsg');
   el.textContent = msg;
+  el.classList.toggle('err', !!isError);
   el.classList.add('show');
   clearTimeout(window._flashTimer);
-  window._flashTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  window._flashTimer = setTimeout(() => el.classList.remove('show'), isError ? 3800 : 2200);
 }
 
 // ---------- LOAD / SAVE (localStorage: persistente sul dispositivo) ----------
+// Wrapper "sicuro": ogni scrittura mantiene anche una copia di backup con un
+// tick di ritardo, così se il salvataggio principale viene interrotto a metà
+// (crash, kill del processo, batteria scarica) il caricamento successivo può
+// recuperare l'ultima versione valida invece di perdere tutto.
 const LS_PREFIX = 'talloncini-cassa:';
 
+function showDataWarning(msg){
+  const el = document.getElementById('dataWarningBanner');
+  document.getElementById('dataWarningText').textContent = msg;
+  el.classList.add('show');
+}
+document.getElementById('dataWarningDismiss').addEventListener('click', () => {
+  document.getElementById('dataWarningBanner').classList.remove('show');
+});
+
+function safeSet(key, value){
+  const json = JSON.stringify(value);
+  try{
+    // Prima di sovrascrivere, sposta il valore attuale (valido) nel backup.
+    const current = localStorage.getItem(LS_PREFIX + key);
+    if(current !== null) localStorage.setItem(LS_PREFIX + key + ':backup', current);
+    localStorage.setItem(LS_PREFIX + key, json);
+    return true;
+  }catch(e){
+    showDataWarning('Memoria del dispositivo piena o non disponibile: alcuni dati potrebbero non essere salvati. Esporta subito un backup dalle Impostazioni ed elimina il resto degli ordini nella Chiusura Cassa.');
+    return false;
+  }
+}
+function safeGet(key, fallback){
+  try{
+    const raw = localStorage.getItem(LS_PREFIX + key);
+    if(raw === null) return fallback;
+    return JSON.parse(raw);
+  }catch(e){
+    // Dato principale corrotto: prova a recuperare il backup precedente.
+    try{
+      const backup = localStorage.getItem(LS_PREFIX + key + ':backup');
+      if(backup !== null){
+        showDataWarning(`Dati "${key}" danneggiati: ripristinata l'ultima versione salvata correttamente. Controlla che sia tutto a posto.`);
+        return JSON.parse(backup);
+      }
+    }catch(e2){ /* anche il backup è illeggibile */ }
+    showDataWarning(`Impossibile leggere i dati "${key}". Se hai un file di backup, importalo dalle Impostazioni.`);
+    return fallback;
+  }
+}
+
 async function loadAll(){
-  try{ const m = localStorage.getItem(LS_PREFIX + 'menu-items'); menu = m ? JSON.parse(m) : []; }catch(e){ menu = []; }
-  try{ const c = localStorage.getItem(LS_PREFIX + 'ticket-counter'); ticketCounter = c ? JSON.parse(c) : 1; }catch(e){ ticketCounter = 1; }
-  try{
-    const s = localStorage.getItem(LS_PREFIX + 'app-settings');
-    if(s) settings = Object.assign(settings, JSON.parse(s));
-  }catch(e){ /* usa default */ }
-  try{
-    const cr = localStorage.getItem(LS_PREFIX + 'admin-creds');
-    if(cr) creds = JSON.parse(cr);
-  }catch(e){ /* usa default admin/admin */ }
-  try{
-    const sl = localStorage.getItem(LS_PREFIX + 'sales-log');
-    salesLog = sl ? JSON.parse(sl) : [];
-  }catch(e){ salesLog = []; }
+  menu = safeGet('menu-items', []);
+  ticketCounter = safeGet('ticket-counter', 1);
+  settings = Object.assign(settings, safeGet('app-settings', {}));
+  creds = safeGet('admin-creds', creds);
+  salesLog = safeGet('sales-log', []);
+  order = safeGet('current-order-draft', []);
 
   normalizeSettings();
   renderCashier();
   renderMenuAdmin();
   renderDishSelectHelpers();
   fillSettingsForm();
+
+  if(order.length > 0){
+    flash('Ordine in corso ripristinato');
+  }
 }
-function saveMenu(){ try{ localStorage.setItem(LS_PREFIX + 'menu-items', JSON.stringify(menu)); }catch(e){ flash('Errore salvataggio: memoria piena o non disponibile'); } }
-function saveCounter(){ try{ localStorage.setItem(LS_PREFIX + 'ticket-counter', JSON.stringify(ticketCounter)); }catch(e){} }
-function saveSettings(){ try{ localStorage.setItem(LS_PREFIX + 'app-settings', JSON.stringify(settings)); }catch(e){ flash('Errore salvataggio impostazioni'); } }
-function saveCreds(){ try{ localStorage.setItem(LS_PREFIX + 'admin-creds', JSON.stringify(creds)); }catch(e){} }
-function saveSalesLog(){ try{ localStorage.setItem(LS_PREFIX + 'sales-log', JSON.stringify(salesLog)); }catch(e){ flash('Errore salvataggio riepilogo vendite'); } }
+function saveMenu(){ return safeSet('menu-items', menu); }
+function saveCounter(){ return safeSet('ticket-counter', ticketCounter); }
+function saveSettings(){ return safeSet('app-settings', settings); }
+function saveCreds(){ return safeSet('admin-creds', creds); }
+function saveSalesLog(){ return safeSet('sales-log', salesLog); }
+// L'ordine corrente viene salvato ad ogni modifica: se l'app viene chiusa o il
+// processo Android termina all'improvviso, alla riapertura l'ordine non si perde.
+function saveOrderDraft(){ try{ localStorage.setItem(LS_PREFIX + 'current-order-draft', JSON.stringify(order)); }catch(e){} }
+function clearOrderDraft(){ try{ localStorage.removeItem(LS_PREFIX + 'current-order-draft'); }catch(e){} }
+
+// ---------- ROBUSTEZZA: errori non gestiti e chiusura improvvisa ----------
+window.addEventListener('error', (e) => {
+  console.error('Errore JS non gestito:', e.error || e.message);
+  flash('Si è verificato un errore imprevisto. I dati salvati non sono stati persi.', true);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('Promise non gestita:', e.reason);
+});
+// Ogni volta che l'app va in background (tasto home, cambio app, schermo che si
+// spegne) salviamo subito lo stato: su Android il processo può essere terminato
+// senza preavviso per liberare memoria.
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden') saveOrderDraft();
+});
+window.addEventListener('pagehide', saveOrderDraft);
 
 function groupByCategory(items){
   const groups = {};
@@ -629,16 +709,19 @@ window.addToOrder = function(dishId){
   if(existing){ existing.qty += 1; }
   else{ order.push({ dishId, name: d.name, price: d.price, qty: 1, note: '' }); }
   renderOrderCashier();
+  saveOrderDraft();
 };
 
 window.changeQty = function(idx, delta){
   order[idx].qty += delta;
   if(order[idx].qty <= 0) order.splice(idx, 1);
   renderOrderCashier();
+  saveOrderDraft();
 };
 window.removeOrderLine = function(idx){
   order.splice(idx, 1);
   renderOrderCashier();
+  saveOrderDraft();
 };
 
 function renderOrderCashier(){
@@ -682,6 +765,7 @@ document.getElementById('clearOrderCashierBtn').addEventListener('click', () => 
   if(!confirm("Svuotare l'ordine corrente?")) return;
   order = [];
   renderOrderCashier();
+  clearOrderDraft();
 });
 
 function recordSale(orderNum, orderLines, now){
@@ -692,7 +776,10 @@ function recordSale(orderNum, orderLines, now){
     lines: orderLines.map(l => ({ name: l.name, qty: l.qty, price: l.price })),
     total
   });
-  saveSalesLog();
+  const saved = saveSalesLog();
+  if(!saved){
+    showDataWarning(`L'ordine #${String(orderNum).padStart(4,'0')} è stato stampato ma NON è stato registrato nel riepilogo cassa per mancanza di spazio. Esporta un backup e libera memoria.`);
+  }
 }
 
 function aggregateSalesLog(){
@@ -955,6 +1042,30 @@ function sendViaRawBt(payload){
   window.location.href = 'rawbt:base64,' + b64;
 }
 
+// Il lato Android intercetta lo schema "rawbt:" e prova ad aprire l'app RawBT.
+// Se RawBT non è installata, ce lo comunica chiamando questa funzione: in tal
+// caso NON dobbiamo considerare l'ordine come stampato, altrimenti si perde
+// l'ordine dalla cassa senza che nulla sia stato realmente stampato.
+window.__rawbtResult = null;
+function sendViaRawBtAndWait(payload, timeoutMs){
+  return new Promise((resolve) => {
+    let settled = false;
+    window.__rawbtResult = (ok, message) => {
+      if(settled) return;
+      settled = true;
+      resolve({ ok, message });
+    };
+    sendViaRawBt(payload);
+    // Se dopo un breve istante non arriva nessun errore dal lato Android,
+    // assumiamo che l'app RawBT sia stata aperta correttamente.
+    setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      resolve({ ok: true });
+    }, timeoutMs || 800);
+  });
+}
+
 function ensurePrintPageStyle(){
   let styleEl = document.getElementById('dynamicPrintStyle');
   if(!styleEl){
@@ -970,36 +1081,61 @@ function ensurePrintPageStyle(){
 
 document.getElementById('printOrderBtn').addEventListener('click', async () => {
   if(order.length === 0) return;
-  const now = new Date();
-  const orderNum = ticketCounter;
 
-  const kitchenTickets = getKitchenTicketsList();
+  const btn = document.getElementById('printOrderBtn');
+  // Blocca doppi tocchi ravvicinati: eviterebbero di stampare due volte lo
+  // stesso ordine e di incrementare il contatore due volte per errore.
+  if(btn.disabled || btn.dataset.printing === '1') return;
+  btn.dataset.printing = '1';
+  btn.disabled = true;
 
-  if(settings.printMethod === 'rawbt'){
-    let payload = ESC + '@'; // init stampante
-    kitchenTickets.forEach(t => { payload += buildKitchenEscPos(t, orderNum, now); });
-    if(settings.autoSummary){
-      payload += buildSummaryEscPos(order, orderNum, now);
+  try{
+    const now = new Date();
+    const orderNum = ticketCounter;
+    const kitchenTickets = getKitchenTicketsList();
+
+    if(settings.printMethod === 'rawbt'){
+      let payload = ESC + '@'; // init stampante
+      kitchenTickets.forEach(t => { payload += buildKitchenEscPos(t, orderNum, now); });
+      if(settings.autoSummary){
+        payload += buildSummaryEscPos(order, orderNum, now);
+      }
+      const result = await sendViaRawBtAndWait(payload);
+      if(!result.ok){
+        // RawBT non è disponibile: NON tocchiamo l'ordine, il contatore né il
+        // registro vendite, così il cassiere può riprovare senza perdere nulla.
+        flash('Stampa non riuscita: RawBT non è disponibile. Ordine conservato, riprova o cambia metodo di stampa nelle Impostazioni.', true);
+        return;
+      }
+      flash('Talloncini inviati a RawBT');
+    }else{
+      let pagesHtml = kitchenTickets.map(t => renderKitchenPage(t, orderNum, now)).join('');
+      if(settings.autoSummary){
+        pagesHtml += renderSummaryPage(order, orderNum, now);
+      }
+      ensurePrintPageStyle();
+      document.getElementById('printArea').innerHTML = pagesHtml;
+      window.print();
+      flash('Ordine inviato e talloncini generati');
     }
-    sendViaRawBt(payload);
-    flash('Talloncini inviati a RawBT');
-  }else{
-    let pagesHtml = kitchenTickets.map(t => renderKitchenPage(t, orderNum, now)).join('');
-    if(settings.autoSummary){
-      pagesHtml += renderSummaryPage(order, orderNum, now);
+
+    ticketCounter += 1;
+    const counterSaved = await saveCounter();
+    recordSale(orderNum, order, now);
+    order = [];
+    clearOrderDraft();
+    renderOrderCashier();
+    document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
+    if(!counterSaved){
+      showDataWarning('Il contatore ordini non è stato salvato correttamente. Controlla la memoria del dispositivo.');
     }
-    ensurePrintPageStyle();
-    document.getElementById('printArea').innerHTML = pagesHtml;
-    window.print();
-    flash('Ordine inviato e talloncini generati');
+  }finally{
+    btn.dataset.printing = '0';
+    // Riallinea sempre lo stato del pulsante al contenuto reale dell'ordine:
+    // se la stampa è fallita l'ordine è ancora pieno e il pulsante torna
+    // cliccabile; se è andata a buon fine l'ordine è vuoto e resta disabilitato.
+    renderOrderCashier();
   }
-
-  ticketCounter += 1;
-  await saveCounter();
-  recordSale(orderNum, order, now);
-  order = [];
-  renderOrderCashier();
-  document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
 });
 
 // ================= ADMIN LOGIN =================
@@ -1433,12 +1569,15 @@ async function importSettingsFromPayload(payload){
   if(payload.creds && payload.creds.username && payload.creds.password){
     creds = payload.creds;
   }
-  await saveMenu();
-  await saveSettings();
-  await saveCreds();
+  const okMenu = await saveMenu();
+  const okSettings = await saveSettings();
+  const okCreds = await saveCreds();
   renderMenuAdmin();
   renderCashier();
   fillSettingsForm();
+  if(!okMenu || !okSettings || !okCreds){
+    showDataWarning('Import completato ma il salvataggio su questo dispositivo non è riuscito del tutto. Riprova o libera memoria.');
+  }
 }
 
 document.getElementById('exportSettingsBtn').addEventListener('click', () => {
