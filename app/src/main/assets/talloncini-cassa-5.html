@@ -470,6 +470,12 @@
           <label style="margin:0;" for="setRawbtCut">La mia stampante ha il taglierino automatico (invia comando di taglio tra un talloncino e l'altro)</label>
         </div>
 
+        <div id="cutFeedWrap" style="display:none;">
+          <label>Avanzamento carta prima del taglio (righe)</label>
+          <input type="number" id="setRawbtCutFeed" min="3" max="20" step="1" style="max-width:120px;">
+          <p class="hint" style="margin-top:-4px;">Se il taglio arriva sopra il testo dell'ultimo talloncino, aumenta questo valore (es. da 5 a 8) e salva: la stampante avanzerà più carta prima di tagliare. Se invece resta troppa carta bianca in fondo, riducilo.</p>
+        </div>
+
         <div class="info-box">
           <b>RawBT è pensato esattamente per le termiche Bluetooth economiche da 58mm</b>, che quasi sempre usano Bluetooth Classic (non Bluetooth Low Energy) — un tipo di connessione che il browser da solo non può gestire.<br><br>
           Impostazione (una tantum):
@@ -544,6 +550,7 @@ let settings = {
   autoSummary: true,
   printMethod: 'rawbt', // Android wrapper default; can be changed to system dialog in Impostazioni
   rawbtCut: false,
+  rawbtCutFeedLines: 5,
   theme: 'dark',
   categoryCumulative: {},
   categorySpacer3cm: {},
@@ -857,8 +864,7 @@ function buildCloseSummaryEscPos(){
   });
   out += P_LINE + '\n';
   out += ESC + 'E' + '\x01' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + grandTotal.toFixed(2) + ESC + 'E' + '\x00' + '\n';
-  out += '\n\n\n';
-  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  out += cutFeedAndCut();
   return out;
 }
 
@@ -989,6 +995,23 @@ function textForPrinter(s){
 const ESC = '\x1B', GS = '\x1D';
 const P_LINE = '-'.repeat(32);
 
+// Avanzamento carta + taglio. La lama del taglierino si trova fisicamente
+// più in basso della testina di stampa: se si avanza poca carta prima del
+// comando di taglio, la lama arriva ancora sopra l'ultima riga stampata e la
+// taglia a metà. Il numero di righe necessario varia da stampante a
+// stampante, quindi è regolabile dalle Impostazioni invece che fisso.
+function cutFeedAndCut(){
+  let out = '';
+  if(settings.rawbtCut){
+    const feedLines = Math.max(3, parseInt(settings.rawbtCutFeedLines, 10) || 5);
+    out += '\n'.repeat(feedLines);
+    out += GS + 'V' + '\x01';
+  }else{
+    out += '\n\n\n';
+  }
+  return out;
+}
+
 function buildKitchenEscPos(ticket, orderNum, now){
   let out = '';
   if(ticket.spacer3cm) out += '\n'.repeat(8); // circa 3 cm su una termica standard
@@ -1003,8 +1026,7 @@ function buildKitchenEscPos(ticket, orderNum, now){
   out += GS + '!' + '\x00';
   if(ticket.note) out += textForPrinter('- ' + ticket.note) + '\n';
   out += ESC + 'a' + '\x00';
-  out += '\n\n\n';
-  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  out += cutFeedAndCut();
   return out;
 }
 function buildSummaryEscPos(lines, orderNum, now){
@@ -1032,8 +1054,7 @@ function buildSummaryEscPos(lines, orderNum, now){
   if(settings.vat) out += textForPrinter(settings.vat) + '\n';
   out += textForPrinter(settings.footer) + '\n';
   out += ESC + 'a' + '\x00';
-  out += '\n\n\n';
-  if(settings.rawbtCut) out += GS + 'V' + '\x01';
+  out += cutFeedAndCut();
   return out;
 }
 
@@ -1458,6 +1479,7 @@ function normalizeSettings(){
   if(!settings.categorySpacer3cm) settings.categorySpacer3cm = {};
   if(!settings.categoryPrintTicket) settings.categoryPrintTicket = {};
   if(!settings.theme) settings.theme = 'dark';
+  if(!settings.rawbtCutFeedLines) settings.rawbtCutFeedLines = 5;
   menu.forEach(d => {
     if(typeof d.showInCashier !== 'boolean') d.showInCashier = true;
   });
@@ -1475,10 +1497,16 @@ function fillSettingsForm(){
   document.getElementById('setAutoSummary').checked = settings.autoSummary;
   document.getElementById('setPrintMethod').value = settings.printMethod;
   document.getElementById('setRawbtCut').checked = settings.rawbtCut;
+  document.getElementById('setRawbtCutFeed').value = settings.rawbtCutFeedLines || 5;
+  document.getElementById('cutFeedWrap').style.display = settings.rawbtCut ? 'block' : 'none';
   document.getElementById('setTheme').value = settings.theme || 'dark';
   applyTheme();
   document.getElementById('counterPreview').textContent = '#' + String(ticketCounter).padStart(4,'0');
 }
+
+document.getElementById('setRawbtCut').addEventListener('change', (e) => {
+  document.getElementById('cutFeedWrap').style.display = e.target.checked ? 'block' : 'none';
+});
 
 document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
   settings.bizName = document.getElementById('setBizName').value.trim() || 'La Mia Attività';
@@ -1493,6 +1521,7 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
   });
   settings.printMethod = document.getElementById('setPrintMethod').value;
   settings.rawbtCut = document.getElementById('setRawbtCut').checked;
+  settings.rawbtCutFeedLines = Math.max(3, Math.min(20, parseInt(document.getElementById('setRawbtCutFeed').value, 10) || 5));
   settings.theme = document.getElementById('setTheme').value || 'dark';
 
   document.querySelectorAll('.cat-cum-toggle').forEach(cb => settings.categoryCumulative[cb.dataset.cat] = cb.checked);
