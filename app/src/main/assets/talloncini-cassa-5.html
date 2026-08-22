@@ -416,6 +416,35 @@
   background: var(--panel-2);
 }
 
+#page-history .ah-row-voided {
+  opacity:.55;
+}
+#page-history .ah-row-voided .admin-history-total {
+  text-decoration:line-through;
+  color: var(--text-dim);
+}
+
+#page-history .ah-badge {
+  display:inline-block;
+  margin-left:6px;
+  padding:2px 7px;
+  border-radius:20px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.03em;
+  vertical-align:middle;
+}
+#page-history .ah-badge-void {
+  background:rgba(220,53,69,.15);
+  color: var(--red);
+  border:1px solid var(--red);
+}
+#page-history .ah-badge-dup {
+  background:rgba(255,193,7,.15);
+  color:#c98a00;
+  border:1px solid #c98a00;
+}
+
 #page-history .admin-history-number,
 #page-history .admin-history-total {
   color: var(--text);
@@ -873,16 +902,29 @@
   window.FirebaseCassa = { app, db, auth, ref, onValue, set, update, runTransaction, push, remove, get };
   window.firebaseReady = false;
 
-  try {
-    await signInAnonymously(auth);
-    window.firebaseReady = true;
-    console.log("Firebase pronto. UID:", auth.currentUser?.uid);
-  } catch (error) {
-    window.firebaseReady = false;
-    console.error("Firebase: autenticazione anonima fallita", error);
+  // Se il primo tentativo fallisce (dispositivo partito offline, es. wifi
+  // della festa non ancora disponibile), NON ci arrendiamo: riproviamo
+  // periodicamente in background. Appena la rete torna disponibile, il
+  // dispositivo si aggancia da solo a Firebase senza bisogno di ricaricare
+  // la pagina — ed emette di nuovo "firebase-ready" così il resto dell'app
+  // (sync + invio delle vendite registrate offline) riparte automaticamente.
+  async function connectFirebase(retryDelayMs){
+    try {
+      await signInAnonymously(auth);
+      window.firebaseReady = true;
+      console.log("Firebase pronto. UID:", auth.currentUser?.uid);
+    } catch (error) {
+      window.firebaseReady = false;
+      console.error("Firebase: autenticazione anonima fallita, nuovo tentativo tra", Math.round(retryDelayMs/1000)+"s", error);
+    }
+    window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: window.firebaseReady } }));
+    if(!window.firebaseReady){
+      const nextDelay = Math.min(retryDelayMs * 1.6, 60000); // backoff, max 60s
+      setTimeout(() => connectFirebase(nextDelay), retryDelayMs);
+    }
   }
+  await connectFirebase(3000);
 
-  window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: window.firebaseReady } }));
 </script>
 
 <script>
@@ -929,6 +971,36 @@ function flash(msg, isError){
 // (crash, kill del processo, batteria scarica) il caricamento successivo può
 // recuperare l'ultima versione valida invece di perdere tutto.
 const LS_PREFIX = 'talloncini-cassa:';
+
+// ID univoco per questo dispositivo, generato una sola volta e conservato in
+// locale. Serve a dare a ogni cassa una chiave separata quando registra una
+// vendita su Firebase, così due dispositivi che scrivono nello stesso
+// momento (o con lo stesso numero scontrino, se erano offline) non si
+// sovrascrivono più a vicenda.
+let deviceId = null;
+function getDeviceId(){
+  if(deviceId) return deviceId;
+  try{
+    deviceId = localStorage.getItem(LS_PREFIX + 'device-id');
+    if(!deviceId){
+      deviceId = uid() + uid();
+      localStorage.setItem(LS_PREFIX + 'device-id', deviceId);
+    }
+  }catch(e){
+    deviceId = uid() + uid(); // fallback in memoria se localStorage non è disponibile
+  }
+  return deviceId;
+}
+function saleKey(sale){
+  if(sale._fbKey) return sale._fbKey; // aggiorna sempre il nodo Firebase già esistente, se noto
+  const owner = sale.deviceId || getDeviceId();
+  return 'order_' + String(sale.orderNum).padStart(4,'0') + '__' + owner;
+}
+// Rimuove i campi di solo uso locale prima di scrivere una vendita su Firebase
+function saleForStorage(sale){
+  const { _fbKey, ...rest } = sale;
+  return rest;
+}
 
 function showDataWarning(msg){
   const el = document.getElementById('dataWarningBanner');
@@ -1050,11 +1122,32 @@ async function saveSalesLog(){
   }
 }
 
+// Salva UN solo ordine con una scrittura mirata (update sulla singola
+// chiave), invece di riscrivere l'intero nodo "cassa/sales" come faceva
+// saveSalesLog(). Così, se due dispositivi registrano una vendita nello
+// stesso momento, ognuno scrive solo la propria voce e non cancella quella
+// dell'altro. Usare saveSalesLog() solo per le operazioni che devono
+// davvero sostituire/azzerare l'intero registro (es. chiusura cassa).
+async function saveSaleEntry(sale){
+  const localOk = safeSet('sales-log', salesLog);
+  if(!window.firebaseReady) return localOk;
+  try{
+    const updates = {};
+    updates[saleKey(sale)] = saleForStorage(sale);
+    await FirebaseCassa.update(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/sales'), updates);
+    return true;
+  }catch(e){
+    console.error('Firebase saveSaleEntry:', e);
+    showDataWarning('Vendita salvata localmente, ma non sincronizzata con Firebase.');
+    return localOk;
+  }
+}
+
 let firebaseSyncStarted = false;
 async function bootstrapFirebaseFromLocal(){
   if(!window.firebaseReady || !window.FirebaseCassa) return;
   try{
-    const {db, ref, get, set} = FirebaseCassa;
+    const {db, ref, get, set, update} = FirebaseCassa;
     const [menuSnap, settingsSnap, counterSnap, salesSnap] = await Promise.all([
       get(ref(db, 'cassa/menu')),
       get(ref(db, 'cassa/settings')),
@@ -1065,7 +1158,21 @@ async function bootstrapFirebaseFromLocal(){
     if(!menuSnap.exists() && menu.length) writes.push(set(ref(db, 'cassa/menu'), Object.fromEntries(menu.map(x => [x.id, x]))));
     if(!settingsSnap.exists()) writes.push(set(ref(db, 'cassa/settings'), settings));
     if(!counterSnap.exists()) writes.push(set(ref(db, 'cassa/counter'), ticketCounter));
-    if(!salesSnap.exists() && salesLog.length) writes.push(set(ref(db, 'cassa/sales'), Object.fromEntries(salesLog.map(x => ['order_' + String(x.orderNum).padStart(4,'0'), x]))));
+
+    // Vendite: ad ogni (ri)connessione, invia sul server quelle registrate
+    // in locale mentre eravamo offline e che il server non ha ancora —
+    // usando la chiave per-dispositivo, così non si rischia mai di
+    // sovrascrivere un ordine con lo stesso numero registrato nel frattempo
+    // da un altro dispositivo. Non si limita più al solo primo avvio.
+    const serverSalesData = salesSnap.exists() ? (salesSnap.val() || {}) : {};
+    const serverKeys = new Set(Object.keys(serverSalesData));
+    const pendingSales = {};
+    salesLog.forEach(sale => {
+      const key = saleKey(sale);
+      if(!serverKeys.has(key)) pendingSales[key] = sale;
+    });
+    if(Object.keys(pendingSales).length) writes.push(update(ref(db, 'cassa/sales'), pendingSales));
+
     if(writes.length) await Promise.all(writes);
   }catch(e){
     console.error('Firebase bootstrap:', e);
@@ -1107,7 +1214,11 @@ function setupFirebaseSync(){
 
   onValue(ref(db, 'cassa/sales'), snap => {
     const data = snap.val();
-    salesLog = data ? Object.values(data).sort((a,b) => Number(a.orderNum)-Number(b.orderNum)) : [];
+    salesLog = data
+      ? Object.entries(data)
+          .map(([key, sale]) => ({ ...sale, _fbKey: key }))
+          .sort((a,b) => Number(a.orderNum)-Number(b.orderNum))
+      : [];
     safeSet('sales-log', salesLog);
     if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
     window.renderAdminHistory?.();
@@ -1116,12 +1227,15 @@ function setupFirebaseSync(){
   console.log('Sincronizzazione Firebase attiva');
 }
 
+let firebaseOfflineWarned = false;
 window.addEventListener('firebase-ready', () => {
   if(window.firebaseReady){
+    firebaseOfflineWarned = false;
     bootstrapFirebaseFromLocal().then(() => setupFirebaseSync());
     flash('Firebase sincronizzato');
-  }else{
-    showDataWarning('Firebase non disponibile: la cassa continua in modalità locale.');
+  }else if(!firebaseOfflineWarned){
+    firebaseOfflineWarned = true;
+    showDataWarning('Firebase non disponibile: la cassa continua in modalità locale. Riproverò automaticamente a riconnettermi.');
   }
 });
 
@@ -1286,21 +1400,58 @@ async function recordSale(orderNum, orderLines, now){
     orderNum,
     ts: now.toISOString(),
     lines: orderLines.map(l => ({ name:l.name, qty:l.qty, price:l.price, note:l.note || '' })),
-    total
+    total,
+    deviceId: getDeviceId(),
+    voided: false
   };
 
   salesLog = salesLog.filter(x => Number(x.orderNum) !== Number(orderNum));
   salesLog.push(sale);
   salesLog.sort((a,b) => Number(a.orderNum)-Number(b.orderNum));
-  const saved = await saveSalesLog();
+  const saved = await saveSaleEntry(sale);
   if(!saved) showDataWarning(`L'ordine #${String(orderNum).padStart(4,'0')} è stato stampato ma il registro cassa è stato salvato solo localmente.`);
   window.renderAdminHistory?.();
+}
+
+// Annulla (o ripristina) un ordine dello storico senza cancellarlo: resta
+// visibile per controllo/audit ma esce dai totali (chiusura cassa, riepiloghi,
+// media scontrino) — utile per uno scontrino battuto male o un errore.
+async function setSaleVoided(sale, voided, reason){
+  if(!sale) return false;
+  sale.voided = voided;
+  sale.voidedAt = voided ? new Date().toISOString() : null;
+  sale.voidedReason = voided ? (reason || '') : '';
+
+  const idx = salesLog.findIndex(x => x === sale || (x.orderNum === sale.orderNum && (x._fbKey || saleKey(x)) === (sale._fbKey || saleKey(sale))));
+  if(idx !== -1) salesLog[idx] = sale;
+
+  const localOk = safeSet('sales-log', salesLog);
+  if(!window.firebaseReady){
+    showDataWarning(`Ordine #${String(sale.orderNum).padStart(4,'0')} ${voided ? 'annullato' : 'ripristinato'} solo localmente (Firebase non disponibile).`);
+    window.renderAdminHistory?.();
+    return localOk;
+  }
+  try{
+    const updates = {};
+    updates[saleKey(sale)] = saleForStorage(sale);
+    await FirebaseCassa.update(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/sales'), updates);
+    window.renderAdminHistory?.();
+    return true;
+  }catch(e){
+    console.error('Firebase setSaleVoided:', e);
+    showDataWarning(`Ordine #${String(sale.orderNum).padStart(4,'0')} ${voided ? 'annullato' : 'ripristinato'} solo localmente, non ancora sincronizzato.`);
+    window.renderAdminHistory?.();
+    return localOk;
+  }
 }
 
 function aggregateSalesLog(){
   const totals = {};
   let grandTotal = 0;
+  let orders = 0;
   salesLog.forEach(entry => {
+    if(entry.voided) return; // un ordine annullato non deve influenzare i totali
+    orders++;
     entry.lines.forEach(l => {
       if(!totals[l.name]) totals[l.name] = { qty: 0, revenue: 0 };
       totals[l.name].qty += l.qty;
@@ -1308,7 +1459,7 @@ function aggregateSalesLog(){
     });
     grandTotal += entry.total;
   });
-  return { totals, grandTotal, orders: salesLog.length };
+  return { totals, grandTotal, orders };
 }
 
 function renderChiusuraCassa(){
@@ -2189,6 +2340,7 @@ loadAll();
     </div>
     <div id="adminHistoryDetailBody"></div>
     <div class="admin-history-modal-actions">
+      <button type="button" id="adminHistoryVoidBtn" class="btn-red">Annulla ordine</button>
       <button type="button" id="adminHistoryReprintBtn">🖨️ Ristampa scontrino</button>
       <button type="button" id="adminHistoryCloseDetail2" class="secondary">Chiudi</button>
     </div>
@@ -2277,17 +2429,34 @@ loadAll();
       .sort((a,b) => ahNumber(b)-ahNumber(a));
   }
 
+  // Numeri scontrino che compaiono più di una volta nell'intero registro
+  // (non solo nella vista filtrata) — capita se due dispositivi erano
+  // entrambi offline e hanno assegnato lo stesso numero. Nessun dato viene
+  // perso (ogni dispositivo salva sotto una propria chiave), ma è giusto
+  // segnalarlo bene in vista, così chi gestisce la cassa se ne accorge ed
+  // eventualmente annulla il doppione sbagliato.
+  function ahDuplicateNumbers() {
+    const source = (typeof salesLog !== 'undefined' && Array.isArray(salesLog)) ? salesLog : [];
+    const counts = {};
+    source.forEach(sale => { const n = ahNumber(sale); counts[n] = (counts[n]||0) + 1; });
+    return counts;
+  }
+
   function renderAdminHistory() {
     const list = document.getElementById('adminHistoryList');
     if (!list) return;
 
     const sales = ahFiltered();
-    const total = sales.reduce((s, sale) => s + ahTotal(sale), 0);
+    // I totali di riepilogo escludono gli ordini annullati, come in
+    // chiusura cassa — uno scontrino battuto male non deve gonfiare l'incasso.
+    const valid = sales.filter(s => !s.voided);
+    const total = valid.reduce((s, sale) => s + ahTotal(sale), 0);
+    const dupCounts = ahDuplicateNumbers();
 
-    document.getElementById('adminHistoryCount').textContent = sales.length;
+    document.getElementById('adminHistoryCount').textContent = valid.length;
     document.getElementById('adminHistoryTotal').textContent = ahMoney(total);
     document.getElementById('adminHistoryAverage').textContent =
-      ahMoney(sales.length ? total / sales.length : 0);
+      ahMoney(valid.length ? total / valid.length : 0);
 
     if (!sales.length) {
       list.innerHTML = `<div class="admin-history-empty">Nessuno scontrino trovato.</div>`;
@@ -2298,14 +2467,18 @@ loadAll();
       const lines = ahLines(sale);
       const qty = lines.reduce((s,l) => s + (Number(l.qty)||0), 0);
       const num = ahNumber(sale);
+      const voided = !!sale.voided;
+      const isDup = dupCounts[num] > 1;
+      const badges = `${voided ? '<span class="ah-badge ah-badge-void">ANNULLATO</span>' : ''}${isDup ? `<span class="ah-badge ah-badge-dup" title="Numero scontrino presente più volte nel registro: probabile assegnazione doppia da due dispositivi offline">⚠ DOPPIO</span>` : ''}`;
 
       return `
-        <div class="admin-history-row">
-          <div class="admin-history-number">#${String(num).padStart(4,'0')}</div>
+        <div class="admin-history-row${voided ? ' ah-row-voided' : ''}">
+          <div class="admin-history-number">#${String(num).padStart(4,'0')} ${badges}</div>
           <div class="muted">${ahDateText(sale)}</div>
           <div>${qty}</div>
           <div class="admin-history-total">${ahMoney(ahTotal(sale))}</div>
           <div style="display:flex;justify-content:flex-end;gap:6px;">
+            <button type="button" class="secondary ah-void" data-index="${i}">${voided ? 'Ripristina' : 'Annulla'}</button>
             <button type="button" class="secondary ah-detail" data-index="${i}">Dettagli</button>
           </div>
         </div>`;
@@ -2317,6 +2490,32 @@ loadAll();
         ahOpenDetail(sale);
       });
     });
+
+    list.querySelectorAll('.ah-void').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sale = ahFiltered()[Number(btn.dataset.index)];
+        ahToggleVoid(sale);
+      });
+    });
+  }
+
+  async function ahToggleVoid(sale) {
+    if (!sale) return;
+    const num = String(ahNumber(sale)).padStart(4, '0');
+
+    if (sale.voided) {
+      if (!confirm(`Ripristinare lo scontrino #${num}? Tornerà a contare nei totali.`)) return;
+      await setSaleVoided(sale, false);
+      flash(`Scontrino #${num} ripristinato`);
+      return;
+    }
+
+    if (!confirm(`Annullare lo scontrino #${num}? Non verrà più conteggiato nei totali e nella chiusura cassa (resta visibile qui per controllo). Usalo per scontrini battuti male o errori.`)) return;
+    const reason = prompt('Motivo dell\'annullamento (facoltativo):', '') || '';
+    await setSaleVoided(sale, true, reason);
+    flash(`Scontrino #${num} annullato`);
+
+    if (adminHistorySelected === sale) ahOpenDetail(sale); // aggiorna il dettaglio se aperto
   }
 
   function ahOpenDetail(sale) {
@@ -2329,11 +2528,19 @@ loadAll();
 
     const num = ahNumber(sale);
     const lines = ahLines(sale);
+    const voided = !!sale.voided;
 
-    title.textContent = `#${String(num).padStart(4,'0')}`;
+    title.textContent = `#${String(num).padStart(4,'0')}${voided ? ' — ANNULLATO' : ''}`;
+
+    const voidNotice = voided ? `
+      <div style="margin:8px 0 14px; padding:10px 12px; border:1px solid var(--red); border-radius:8px; background:rgba(220,53,69,.08); color:var(--red); font-size:13px;">
+        Scontrino annullato${sale.voidedAt ? ' il ' + new Date(sale.voidedAt).toLocaleString('it-IT') : ''}.
+        Non è conteggiato nei totali.${sale.voidedReason ? '<br>Motivo: ' + ahEscape(sale.voidedReason) : ''}
+      </div>` : '';
 
     body.innerHTML = `
       <div class="muted" style="margin:10px 0 4px;">${ahDateText(sale)}</div>
+      ${voidNotice}
       ${lines.map(line => {
         const q = Number(line.qty)||0;
         const p = Number(line.price)||0;
@@ -2350,6 +2557,9 @@ loadAll();
         <span>${ahMoney(ahTotal(sale))}</span>
       </div>`;
 
+    const voidBtn = document.getElementById('adminHistoryVoidBtn');
+    if (voidBtn) voidBtn.textContent = voided ? 'Ripristina ordine' : 'Annulla ordine';
+
     modal.style.display = 'flex';
   }
 
@@ -2361,6 +2571,7 @@ loadAll();
 
   async function ahReprint(sale) {
     if (!sale) return;
+    if (sale.voided && !confirm('Questo scontrino è stato annullato. Ristampare comunque?')) return;
 
     // Usa sempre la stessa pipeline di stampa della cassa (rispetta il
     // metodo scelto — dialogo di sistema o RawBT — la larghezza carta e la
@@ -2401,6 +2612,10 @@ loadAll();
 
     document.getElementById('adminHistoryReprintBtn')?.addEventListener('click', () => {
       ahReprint(adminHistorySelected);
+    });
+
+    document.getElementById('adminHistoryVoidBtn')?.addEventListener('click', () => {
+      ahToggleVoid(adminHistorySelected);
     });
 
     document.getElementById('adminHistoryDetailModal')?.addEventListener('click', e => {
