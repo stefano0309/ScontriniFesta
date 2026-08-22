@@ -61,7 +61,11 @@
   .admin-gear:hover{ border-color: var(--amber); color: var(--amber); }
 
   .cash-body{ display:flex; flex:1; min-height:0; }
-  @media (max-width: 760px){ .cash-body{ flex-direction:column; } }
+  /* Soglia alzata da 760 a 820px: molti tablet in verticale (es. iPad, 768px
+     di larghezza CSS) restavano nel layout a due colonne del desktop, con il
+     pannello ordine schiacciato contro la griglia piatti. Sopra gli 820px il
+     layout resta affiancato come su desktop/tablet orizzontale. */
+  @media (max-width: 820px){ .cash-body{ flex-direction:column; } }
 
   .dish-panel{ flex: 1.4; overflow-y:auto; padding: 14px; }
   .order-panel{
@@ -69,7 +73,7 @@
     background: var(--panel); border-left:1px solid var(--line);
     display:flex; flex-direction:column; padding: 14px;
   }
-  @media (max-width: 760px){
+  @media (max-width: 820px){
     .order-panel{ max-width:none; border-left:none; border-top:1px solid var(--line); }
   }
 
@@ -90,6 +94,19 @@
   }
   .dish-btn:active{ background: var(--panel-2); border-color: var(--amber); transform: scale(0.98); }
   .dish-btn .p{ color: var(--amber); font-family:'JetBrains Mono',monospace; font-weight:700; font-size:13px; }
+  .dish-status{display:inline-block;margin-top:4px;padding:2px 7px;border-radius:999px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:800;letter-spacing:.02em;}
+  .dish-counter{background:rgba(76,144,136,.16);color:var(--teal);border:1px solid rgba(76,144,136,.45);}
+  .dish-countdown{background:rgba(227,160,8,.15);color:var(--amber);border:1px solid rgba(227,160,8,.45);}
+  .dish-countdown-low{background:rgba(193,82,62,.16);color:var(--red);border-color:var(--red);}
+  .dish-btn-soldout{opacity:.45;cursor:not-allowed;}
+
+  /* Scorciatoia "Modifica ultimo ordine" in alto nel pannello ordine,
+     attivata da un pulsante icona identico per stile al pulsante
+     ingranaggio delle Impostazioni (.admin-gear). */
+  .order-panel-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+  .order-panel-head h3{ margin:0; }
+  .admin-gear:disabled{ opacity:.35; cursor:not-allowed; border-color:var(--line); color:var(--text-dim); }
+  #lastOrderMeta{ font-size:11px; color:var(--text-dim); margin-bottom:10px; min-height:14px; }
 
   .order-panel h3{
     font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:13px; letter-spacing:0.05em;
@@ -161,7 +178,7 @@
   #adminLoginOverlay.show{ display:flex; }
   .login-card{
     background: var(--panel); border:1px solid var(--line); border-radius: 12px;
-    padding: 24px; width: 300px;
+    padding: 24px; width: 300px; max-width: 90vw; box-sizing: border-box;
   }
   .login-card h3{ margin:0 0 14px; font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:15px; color:var(--amber); }
   .login-card label{ font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px; }
@@ -477,6 +494,7 @@
   width:32px; height:32px; border-radius:8px; font-size:14px; flex-shrink:0;
 }
 .admin-history-modal .icon-btn:hover{ border-color: var(--amber); color: var(--amber); }
+#adminHistoryEditBtn:disabled{opacity:.45;cursor:not-allowed;}
 
 .admin-history-modal {
   position:fixed;
@@ -586,7 +604,11 @@
     </div>
 
     <div class="order-panel">
-      <h3>Ordine corrente</h3>
+      <div class="order-panel-head">
+        <h3>Ordine corrente</h3>
+        <button type="button" class="admin-gear" id="editLastOrderBtn" title="Modifica ultimo ordine" disabled>✎</button>
+      </div>
+      <div id="lastOrderMeta">Nessun ultimo ordine modificabile.</div>
       <div id="orderLinesCashier"><div class="order-empty">Tocca un piatto per aggiungerlo</div></div>
       <div class="order-total-row" id="orderTotalRow" style="display:none;">
         <span>Totale</span><span id="orderTotalVal">€ 0,00</span>
@@ -631,6 +653,7 @@
     <div class="tabs">
       <button class="tab-btn active" data-tab="menuTab">Menu</button>
       <button class="tab-btn" data-tab="csvTab">Importa CSV</button>
+      <button class="tab-btn" data-tab="cashFloatTab">💰 Fondo Cassa</button>
       <button class="tab-btn" data-tab="closeTab">Chiusura Cassa</button>
       <button class="tab-btn" data-tab="page-history">🧾 Storico</button>
       <button class="tab-btn" data-tab="settingsTab">Impostazioni</button>
@@ -686,6 +709,39 @@
         </div>
         <button class="btn-teal btn-block" id="importCsvBtn">⇪ Importa CSV</button>
         <div class="status-line" id="csvStatus"></div>
+      </div>
+    </div>
+
+    <!-- CASH FLOAT TAB -->
+    <div class="tab-pane" id="cashFloatTab">
+      <div class="panel">
+        <h2>Fondo cassa iniziale</h2>
+        <p class="hint">Inserisci l'importo presente in cassa all'inizio della serata (fondo per il resto). Viene sommato all'incasso per calcolare il totale atteso in cassa a fine serata, ed è sincronizzato su tutti i dispositivi collegati. Si azzera automaticamente con "Chiudi cassa e azzera", pronto per la prossima serata.</p>
+        <label>Importo fondo cassa</label>
+        <input type="number" id="setCashFloat" min="0" step="0.01" placeholder="0.00">
+        <label>Nota (facoltativa)</label>
+        <input type="text" id="setCashFloatNote" placeholder="es. 5 banconote da 20€, resto in monete">
+        <button class="btn-amber btn-block" id="saveCashFloatBtn" style="margin-top:10px;">Salva fondo cassa</button>
+        <div class="status-line" id="cashFloatStatus"></div>
+        <div id="cashFloatCurrent" class="info-box" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Contante aggiunto durante la serata</h2>
+        <p class="hint">Usa questo per registrare contante aggiunto al banco a serata iniziata (es. resto portato da un altro punto cassa). Ogni aggiunta resta visibile in una sezione separata dello scontrino di chiusura cassa, con orario e dispositivo, e si somma al totale atteso in cassa. Si azzera insieme al fondo cassa alla chiusura.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+          <div style="flex:1; min-width:120px;">
+            <label>Importo</label>
+            <input type="number" id="addCashAmount" min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div style="flex:2; min-width:180px;">
+            <label>Nota (facoltativa)</label>
+            <input type="text" id="addCashNote" placeholder="es. cambio portato dal bar">
+          </div>
+          <button class="btn-amber" id="addCashBtn" style="padding:10px 16px; white-space:nowrap;">+ Aggiungi</button>
+        </div>
+        <div class="status-line" id="cashAdditionsStatus"></div>
+        <div id="cashAdditionsList" style="margin-top:14px;"></div>
       </div>
     </div>
 
@@ -788,8 +844,19 @@
       </div>
 
       <div class="panel">
+        <h2>Etichetta dispositivo</h2>
+        <p class="hint">
+          Ogni dispositivo antepone questa etichetta al numero scontrino (es. <b>A-0007</b>), così i numeri non sono <b>mai</b> doppi anche se due dispositivi stampano contemporaneamente offline. Usa un'etichetta breve e diversa su ogni tablet/telefono (es. "A" sulla cassa principale, "B" su una seconda cassa). Se possibile, salvandola online viene verificato automaticamente che nessun altro dispositivo la stia già usando.
+        </p>
+        <label>Etichetta di questo dispositivo</label>
+        <input type="text" id="setDeviceTag" maxlength="4" placeholder="es. A" style="max-width:140px; text-transform:uppercase;">
+        <button class="btn-amber" id="saveDeviceTagBtn" style="margin-top:8px; padding:9px 14px;">Salva etichetta</button>
+        <div class="status-line" id="deviceTagStatus"></div>
+      </div>
+
+      <div class="panel">
         <h2>Contatore ordini</h2>
-        <p class="hint">Prossimo numero: <span id="counterPreview">#0001</span></p>
+        <p class="hint">Prossimo numero (su questo dispositivo): <span id="counterPreview">#0001</span></p>
         <button class="btn-red" id="resetCounterBtn" style="padding:9px 14px;">Reimposta contatore a #0001</button>
       </div>
 
@@ -933,6 +1000,8 @@ let order = [];
 let ticketCounter = 1;
 let adminLoggedIn = false;
 let salesLog = [];
+let cashFloat = { amount: 0, note: '', setAt: null };
+let cashAdditions = []; // {amount, note, ts, deviceId, deviceTag, _fbKey?}
 
 let settings = {
   bizName: 'La Mia Attività',
@@ -1002,6 +1071,104 @@ function saleForStorage(sale){
   return rest;
 }
 
+/*
+ * ETICHETTA DISPOSITIVO — garanzia che il numero scontrino non sia MAI doppio.
+ *
+ * Con due dispositivi che possono stampare offline in modo completamente
+ * indipendente, un numero puramente sequenziale condiviso NON può essere
+ * garantito unico al 100%: se entrambi perdono la connessione nello stesso
+ * momento, non hanno modo di sapere quale numero ha già usato l'altro.
+ *
+ * La soluzione robusta è dare a ogni dispositivo un'etichetta breve (es. "A",
+ * "B") che precede il numero — "A-0007", "B-0007" — così l'unicità è
+ * garantita per costruzione, sempre, anche offline all'infinito, senza
+ * bisogno di alcun coordinamento di rete: due dispositivi con etichette
+ * diverse non potranno MAI generare lo stesso codice scontrino.
+ *
+ * L'unico modo per rompere questa garanzia è impostare la STESSA etichetta
+ * su due dispositivi per errore: per questo il salvataggio dell'etichetta
+ * prova a "prenotarla" su Firebase quando online (rifiutando se già in uso
+ * da un altro dispositivo) e viene ri-verificata automaticamente ad ogni
+ * riconnessione, avvisando subito se viene rilevato un conflitto.
+ */
+let deviceTag = null;
+function getDeviceTag(){
+  if(deviceTag) return deviceTag;
+  try{
+    deviceTag = localStorage.getItem(LS_PREFIX + 'device-tag');
+  }catch(e){}
+  if(!deviceTag){
+    // Etichetta provvisoria derivata dall'ID dispositivo, così l'app resta
+    // utilizzabile da subito anche prima di qualunque configurazione: due
+    // dispositivi diversi avranno con altissima probabilità etichette
+    // diverse. Va comunque personalizzata dall'admin in Impostazioni prima
+    // di usare più dispositivi insieme, per chiarezza verso i camerieri
+    // (es. "A" / "B" invece di un codice casuale).
+    deviceTag = getDeviceId().replace(/[^a-z0-9]/gi,'').slice(0,2).toUpperCase() || 'X1';
+    try{ localStorage.setItem(LS_PREFIX + 'device-tag', deviceTag); }catch(e){}
+  }
+  return deviceTag;
+}
+
+// Prova a impostare una nuova etichetta per questo dispositivo. Se Firebase è
+// raggiungibile, la "prenota" con una transazione atomica: se un altro
+// dispositivo la sta già usando, il salvataggio viene rifiutato.
+async function setDeviceTag(newTag){
+  const tag = String(newTag||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+  if(!tag) return { ok:false, error:'Inserisci un\'etichetta valida (lettere/numeri, es. "A").' };
+
+  if(window.firebaseReady){
+    try{
+      const tagRef = FirebaseCassa.ref(FirebaseCassa.db, 'cassa/deviceTags/' + tag);
+      const result = await FirebaseCassa.runTransaction(tagRef, current => {
+        if(current && current.deviceId && current.deviceId !== getDeviceId()) return; // conflitto: abort
+        return { deviceId: getDeviceId(), claimedAt: new Date().toISOString() };
+      });
+      if(!result.committed){
+        return { ok:false, error:`L'etichetta "${tag}" è già in uso su un altro dispositivo collegato. Scegline un'altra (es. una lettera diversa).` };
+      }
+    }catch(e){
+      console.error('Firebase setDeviceTag:', e);
+      // Se la verifica online fallisce per un motivo diverso dal conflitto,
+      // non blocchiamo comunque il salvataggio locale.
+    }
+  }
+
+  deviceTag = tag;
+  try{ localStorage.setItem(LS_PREFIX + 'device-tag', deviceTag); }catch(e){}
+  return { ok:true, offline: !window.firebaseReady };
+}
+
+// Ri-verifica ad ogni (ri)connessione che l'etichetta di questo dispositivo
+// non sia stata nel frattempo reclamata anche da un altro (es. entrambi
+// configurati offline nello stesso periodo con la stessa etichetta). In tal
+// caso avvisa subito, in modo ben visibile, invece di scoprirlo solo a fine
+// serata controllando lo storico.
+async function verifyDeviceTagClaim(){
+  if(!window.firebaseReady || !window.FirebaseCassa) return;
+  const tag = getDeviceTag();
+  try{
+    const tagRef = FirebaseCassa.ref(FirebaseCassa.db, 'cassa/deviceTags/' + tag);
+    const result = await FirebaseCassa.runTransaction(tagRef, current => {
+      if(current && current.deviceId && current.deviceId !== getDeviceId()) return; // conflitto: abort
+      return { deviceId: getDeviceId(), claimedAt: new Date().toISOString() };
+    });
+    if(!result.committed){
+      showDataWarning(`ATTENZIONE: l'etichetta scontrini "${tag}" di questo dispositivo risulta usata anche da un altro dispositivo collegato! I numeri scontrino potrebbero duplicarsi. Vai in Impostazioni e assegna un'etichetta diversa a uno dei due dispositivi il prima possibile.`);
+    }
+  }catch(e){
+    console.error('Firebase verifyDeviceTagClaim:', e);
+  }
+}
+
+// Formatta il codice scontrino completo (etichetta + numero), es. "A-0007".
+// Usare sempre questa funzione per mostrare/stampare un numero scontrino,
+// mai il solo numero, altrimenti la garanzia di unicità va persa in stampa.
+function formatTicketNum(orderNum, tag){
+  const t = String(tag || '').trim();
+  return (t ? t + '-' : '') + String(orderNum).padStart(4,'0');
+}
+
 function showDataWarning(msg){
   const el = document.getElementById('dataWarningBanner');
   document.getElementById('dataWarningText').textContent = msg;
@@ -1050,6 +1217,8 @@ async function loadAll(){
   settings = Object.assign(settings, safeGet('app-settings', {}));
   creds = safeGet('admin-creds', creds);
   salesLog = safeGet('sales-log', []);
+  cashFloat = safeGet('cash-float', { amount: 0, note: '', setAt: null });
+  cashAdditions = safeGet('cash-additions', []);
   order = safeGet('current-order-draft', []);
 
   normalizeSettings();
@@ -1057,6 +1226,7 @@ async function loadAll(){
   renderMenuAdmin();
   renderDishSelectHelpers();
   fillSettingsForm();
+  fillCashFloatForm();
 
   if(order.length > 0) flash('Ordine in corso ripristinato');
 
@@ -1083,7 +1253,7 @@ async function saveCounter(){
   const localOk = safeSet('ticket-counter', ticketCounter);
   if(!window.firebaseReady) return localOk;
   try{
-    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/counter'), ticketCounter);
+    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/counters/' + getDeviceTag()), ticketCounter);
     return true;
   }catch(e){
     console.error('Firebase saveCounter:', e);
@@ -1146,18 +1316,31 @@ async function saveSaleEntry(sale){
 let firebaseSyncStarted = false;
 async function bootstrapFirebaseFromLocal(){
   if(!window.firebaseReady || !window.FirebaseCassa) return;
+  await verifyDeviceTagClaim();
   try{
-    const {db, ref, get, set, update} = FirebaseCassa;
-    const [menuSnap, settingsSnap, counterSnap, salesSnap] = await Promise.all([
+    const {db, ref, get, set, update, push} = FirebaseCassa;
+    const [menuSnap, settingsSnap, counterSnap, salesSnap, cashFloatSnap] = await Promise.all([
       get(ref(db, 'cassa/menu')),
       get(ref(db, 'cassa/settings')),
-      get(ref(db, 'cassa/counter')),
-      get(ref(db, 'cassa/sales'))
+      get(ref(db, 'cassa/counters/' + getDeviceTag())),
+      get(ref(db, 'cassa/sales')),
+      get(ref(db, 'cassa/cashFloat'))
     ]);
     const writes = [];
     if(!menuSnap.exists() && menu.length) writes.push(set(ref(db, 'cassa/menu'), Object.fromEntries(menu.map(x => [x.id, x]))));
     if(!settingsSnap.exists()) writes.push(set(ref(db, 'cassa/settings'), settings));
-    if(!counterSnap.exists()) writes.push(set(ref(db, 'cassa/counter'), ticketCounter));
+    if(!counterSnap.exists()) writes.push(set(ref(db, 'cassa/counters/' + getDeviceTag()), ticketCounter));
+    if(!cashFloatSnap.exists() && cashFloat.setAt) writes.push(set(ref(db, 'cassa/cashFloat'), cashFloat));
+
+    // Aggiunte di contante registrate offline (senza ancora una chiave
+    // server): vengono inviate ora con push(), che assegna loro una chiave
+    // univoca — non sovrascrivono mai quelle già presenti sul server.
+    const pendingAdditions = cashAdditions.filter(a => !a._fbKey);
+    pendingAdditions.forEach(a => {
+      const newRef = push(ref(db, 'cassa/cashAdditions'));
+      const { _fbKey, ...toStore } = a;
+      writes.push(set(newRef, toStore).then(() => { a._fbKey = newRef.key; }));
+    });
 
     // Vendite: ad ogni (ri)connessione, invia sul server quelle registrate
     // in locale mentre eravamo offline e che il server non ha ancora —
@@ -1202,26 +1385,44 @@ function setupFirebaseSync(){
     }
   });
 
-  onValue(ref(db, 'cassa/counter'), snap => {
-    const value = snap.val();
-    if(typeof value === 'number' && Number.isFinite(value)){
-      ticketCounter = value;
-      safeSet('ticket-counter', ticketCounter);
-      document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
-      document.getElementById('counterPreview').textContent = '#' + String(ticketCounter).padStart(4,'0');
-    }
-  });
+  // Nota: il contatore scontrini non è più condiviso tra dispositivi (ogni
+  // dispositivo tiene il proprio, autorevole in locale — vedi
+  // reserveTicketNumber). Il nodo 'cassa/counters/{etichetta}' su Firebase è
+  // solo uno specchio per la visibilità nel pannello admin, quindi qui non
+  // c'è più bisogno di un listener che lo rilegga e sovrascriva il locale.
 
   onValue(ref(db, 'cassa/sales'), snap => {
     const data = snap.val();
     salesLog = data
       ? Object.entries(data)
           .map(([key, sale]) => ({ ...sale, _fbKey: key }))
-          .sort((a,b) => Number(a.orderNum)-Number(b.orderNum))
+          .sort((a,b) => new Date(a.ts) - new Date(b.ts))
       : [];
     safeSet('sales-log', salesLog);
     if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
     window.renderAdminHistory?.();
+    renderDishGrid();
+    renderLastOrderShortcut();
+  });
+
+  onValue(ref(db, 'cassa/cashFloat'), snap => {
+    const data = snap.val();
+    cashFloat = data || { amount: 0, note: '', setAt: null };
+    safeSet('cash-float', cashFloat);
+    fillCashFloatForm();
+    if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
+  });
+
+  onValue(ref(db, 'cassa/cashAdditions'), snap => {
+    const data = snap.val();
+    cashAdditions = data
+      ? Object.entries(data)
+          .map(([key, a]) => ({ ...a, _fbKey: key }))
+          .sort((a,b) => new Date(a.ts) - new Date(b.ts))
+      : [];
+    safeSet('cash-additions', cashAdditions);
+    renderCashAdditionsList();
+    if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
   });
 
   console.log('Sincronizzazione Firebase attiva');
@@ -1239,26 +1440,25 @@ window.addEventListener('firebase-ready', () => {
   }
 });
 
+// Il numero scontrino è ora sempre "etichetta + contatore locale" (es.
+// "A-0007"): l'unicità è garantita per costruzione dall'etichetta del
+// dispositivo (vedi getDeviceTag), quindi non serve più alcuna transazione
+// condivisa su Firebase per riservare il numero — funziona identicamente
+// online e offline, senza mai poter collidere con un altro dispositivo che
+// abbia un'etichetta diversa.
 async function reserveTicketNumber(){
-  if(!window.firebaseReady){
-    const n = ticketCounter;
-    ticketCounter += 1;
-    safeSet('ticket-counter', ticketCounter);
-    return n;
-  }
-
-  const counterRef = FirebaseCassa.ref(FirebaseCassa.db, 'cassa/counter');
-  const result = await FirebaseCassa.runTransaction(counterRef, current => {
-    const value = (typeof current === 'number' && current >= 1) ? current : 1;
-    return value + 1;
-  });
-
-  if(!result.committed) throw new Error('Numero ordine non riservato');
-  const nextValue = result.snapshot.val();
-  const orderNum = nextValue - 1;
-  ticketCounter = nextValue;
+  const n = ticketCounter;
+  ticketCounter += 1;
   safeSet('ticket-counter', ticketCounter);
-  return orderNum;
+  // Mirror del contatore su Firebase, solo per visibilità nel pannello admin
+  // (es. "prossimo numero" degli altri dispositivi) — non incide sulla
+  // correttezza/unicità, quindi è volutamente "fire and forget".
+  if(window.firebaseReady){
+    FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/counters/' + getDeviceTag()), ticketCounter).catch(e => {
+      console.error('Firebase mirror contatore:', e);
+    });
+  }
+  return n;
 }
 
 // L'ordine corrente viene salvato ad ogni modifica: se l'app viene chiusa o il
@@ -1295,10 +1495,33 @@ function groupByCategory(items){
 // ================= CASHIER VIEW =================
 function renderCashier(){
   document.getElementById('bizNameLabel').innerHTML = escapeHtml(settings.bizName) + ' <span>Ordini</span>';
-  document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
+  document.getElementById('nextTicketLabel').textContent = '#' + formatTicketNum(ticketCounter, getDeviceTag());
 
   renderDishGrid();
   renderOrderCashier();
+  renderLastOrderShortcut();
+}
+
+// Quanti pezzi di un piatto sono stati venduti in questa serata (scontrini
+// annullati esclusi, coerentemente col resto dell'app). Il conteggio si
+// azzera con "Chiudi cassa e azzera", insieme al resto del registro vendite.
+function dishSoldQty(d){
+  let sold = 0;
+  salesLog.forEach(sale => {
+    if(sale.voided) return;
+    (sale.lines||[]).forEach(l => { if((l.dishId && l.dishId === d.id) || (!l.dishId && l.name === d.name)) sold += Number(l.qty)||0; });
+  });
+  return sold;
+}
+// Pezzi dello stesso piatto già presenti nell'ordine che si sta componendo
+// (non ancora stampato): serve per bloccare il superamento del limite anche
+// prima di mandare in stampa.
+function dishDraftQty(d){
+  return order.filter(l => l.name === d.name).reduce((s,l) => s + (Number(l.qty)||0), 0);
+}
+function dishRemainingQty(d){
+  if(!d.showCountdown || !d.maxQty) return Infinity;
+  return d.maxQty - dishSoldQty(d) - dishDraftQty(d);
 }
 
 function renderDishGrid(){
@@ -1318,8 +1541,25 @@ function renderDishGrid(){
     html += `<div class="cat-block"><h3>${escapeHtml(cat)}</h3><div class="dish-grid">`;
     groups[cat].forEach(d => {
       const comboLine = d.type === 'combo' ? `<span style="display:block; font-size:10.5px; color:var(--teal); font-weight:500; margin-top:2px;">${escapeHtml((d.items||[]).join(' · '))}</span>` : '';
-      html += `<button type="button" class="dish-btn" onclick="addToOrder('${d.id}')">
-        <span><span style="display:block;">${escapeHtml(d.name)}</span>${comboLine}</span>
+
+      // Due badge visivamente diversi, per essere riconoscibili a colpo
+      // d'occhio durante il servizio:
+      // - "Contatore" (informativo, neutro): quanti venduti finora.
+      // - "Countdown" (di avviso, colore ambra/rosso quando si esaurisce):
+      //   quanti ne restano rispetto al limite impostato.
+      let statusLine = '';
+      if(d.showSalesCounter){
+        statusLine += `<span class="dish-status dish-counter">Venduti ${dishSoldQty(d)}</span>`;
+      }
+      if(d.showCountdown && d.maxQty){
+        const remaining = Math.max(0, dishRemainingQty(d));
+        const low = remaining <= Math.max(3, Math.round(d.maxQty * 0.1));
+        statusLine += `<span class="dish-status dish-countdown${low ? ' dish-countdown-low' : ''}">${remaining <= 0 ? 'ESAURITO' : 'Rimasti ' + remaining}</span>`;
+      }
+
+      const soldOut = d.showCountdown && d.maxQty && dishRemainingQty(d) <= 0;
+      html += `<button type="button" class="dish-btn${soldOut ? ' dish-btn-soldout' : ''}" ${soldOut ? 'disabled' : ''} onclick="addToOrder('${d.id}')">
+        <span><span style="display:block;">${escapeHtml(d.name)}</span>${comboLine}${statusLine}</span>
         <span class="p">${settings.currency} ${d.price.toFixed(2)}</span>
       </button>`;
     });
@@ -1331,23 +1571,43 @@ function renderDishGrid(){
 window.addToOrder = function(dishId){
   const d = menu.find(x => x.id === dishId);
   if(!d) return;
+  if(d.showCountdown && d.maxQty && dishRemainingQty(d) <= 0){
+    flash(`"${d.name}" ha raggiunto il limite di ${d.maxQty} pezzi per questa serata.`, true);
+    renderDishGrid();
+    return;
+  }
   const existing = order.find(l => l.dishId === dishId && !l.note);
   if(existing){ existing.qty += 1; }
   else{ order.push({ dishId, name: d.name, price: d.price, qty: 1, note: '' }); }
   renderOrderCashier();
   saveOrderDraft();
+  refreshDishGridIfTracked(dishId); // aggiorna subito contatore/countdown visibili
 };
 
+// Se il piatto interessato mostra il contatore vendite o il countdown,
+// il pannello piatti va ridisegnato anche qui: altrimenti, dopo una
+// rimozione/riduzione, il numero rimasto mostrato sul pulsante resta
+// quello vecchio finché non si tocca un altro piatto (bug di allineamento
+// contatori corretto: l'aggiunta aggiornava la grid, la rimozione no).
+function refreshDishGridIfTracked(dishId){
+  const d = menu.find(x => x.id === dishId);
+  if(d && (d.showCountdown || d.showSalesCounter)) renderDishGrid();
+}
+
 window.changeQty = function(idx, delta){
+  const dishId = order[idx]?.dishId;
   order[idx].qty += delta;
   if(order[idx].qty <= 0) order.splice(idx, 1);
   renderOrderCashier();
   saveOrderDraft();
+  refreshDishGridIfTracked(dishId);
 };
 window.removeOrderLine = function(idx){
+  const dishId = order[idx]?.dishId;
   order.splice(idx, 1);
   renderOrderCashier();
   saveOrderDraft();
+  refreshDishGridIfTracked(dishId);
 };
 
 function renderOrderCashier(){
@@ -1399,18 +1659,26 @@ async function recordSale(orderNum, orderLines, now){
   const sale = {
     orderNum,
     ts: now.toISOString(),
-    lines: orderLines.map(l => ({ name:l.name, qty:l.qty, price:l.price, note:l.note || '' })),
+    lines: orderLines.map(l => ({ dishId:l.dishId || '', name:l.name, qty:l.qty, price:l.price, note:l.note || '' })),
     total,
     deviceId: getDeviceId(),
+    deviceTag: getDeviceTag(),
     voided: false
   };
 
-  salesLog = salesLog.filter(x => Number(x.orderNum) !== Number(orderNum));
+  // Rimuoviamo solo un eventuale duplicato locale creato da QUESTO stesso
+  // dispositivo (es. nuovo salvataggio dello stesso numero) — mai quello di
+  // un altro dispositivo, che può legittimamente avere usato lo stesso
+  // contatore grezzo prima di ricevere un'etichetta diversa.
+  salesLog = salesLog.filter(x => !(Number(x.orderNum) === Number(orderNum) && (x.deviceId||'') === getDeviceId()));
   salesLog.push(sale);
-  salesLog.sort((a,b) => Number(a.orderNum)-Number(b.orderNum));
+  salesLog.sort((a,b) => new Date(a.ts) - new Date(b.ts));
   const saved = await saveSaleEntry(sale);
-  if(!saved) showDataWarning(`L'ordine #${String(orderNum).padStart(4,'0')} è stato stampato ma il registro cassa è stato salvato solo localmente.`);
+  const label = formatTicketNum(orderNum, sale.deviceTag);
+  if(!saved) showDataWarning(`L'ordine #${label} è stato stampato ma il registro cassa è stato salvato solo localmente.`);
   window.renderAdminHistory?.();
+  renderLastOrderShortcut();
+  return sale;
 }
 
 // Annulla (o ripristina) un ordine dello storico senza cancellarlo: resta
@@ -1427,8 +1695,10 @@ async function setSaleVoided(sale, voided, reason){
 
   const localOk = safeSet('sales-log', salesLog);
   if(!window.firebaseReady){
-    showDataWarning(`Ordine #${String(sale.orderNum).padStart(4,'0')} ${voided ? 'annullato' : 'ripristinato'} solo localmente (Firebase non disponibile).`);
+    showDataWarning(`Ordine #${formatTicketNum(sale.orderNum, sale.deviceTag)} ${voided ? 'annullato' : 'ripristinato'} solo localmente (Firebase non disponibile).`);
     window.renderAdminHistory?.();
+    renderDishGrid();
+    renderLastOrderShortcut();
     return localOk;
   }
   try{
@@ -1436,11 +1706,15 @@ async function setSaleVoided(sale, voided, reason){
     updates[saleKey(sale)] = saleForStorage(sale);
     await FirebaseCassa.update(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/sales'), updates);
     window.renderAdminHistory?.();
+    renderDishGrid();
+    renderLastOrderShortcut();
     return true;
   }catch(e){
     console.error('Firebase setSaleVoided:', e);
-    showDataWarning(`Ordine #${String(sale.orderNum).padStart(4,'0')} ${voided ? 'annullato' : 'ripristinato'} solo localmente, non ancora sincronizzato.`);
+    showDataWarning(`Ordine #${formatTicketNum(sale.orderNum, sale.deviceTag)} ${voided ? 'annullato' : 'ripristinato'} solo localmente, non ancora sincronizzato.`);
     window.renderAdminHistory?.();
+    renderDishGrid();
+    renderLastOrderShortcut();
     return localOk;
   }
 }
@@ -1464,18 +1738,35 @@ function aggregateSalesLog(){
 
 function renderChiusuraCassa(){
   const el = document.getElementById('closeSummary');
-  if(salesLog.length === 0){
-    el.innerHTML = '<div class="empty-hint">Nessun ordine registrato dall\'ultima chiusura.</div>';
+  const additionsTotal = cashAdditionsTotal();
+  const floatRow = cashFloat.setAt
+    ? `<div class="info-box" style="margin-bottom:14px;">Fondo cassa iniziale: <b>${settings.currency} ${Number(cashFloat.amount||0).toFixed(2)}</b>${cashFloat.note ? ' — ' + escapeHtml(cashFloat.note) : ''}</div>`
+    : '';
+  const additionsRows = cashAdditions.length ? `
+    <div class="info-box" style="margin:0 0 14px;">
+      <b>Contante aggiunto durante la serata</b> — totale <b>${settings.currency} ${additionsTotal.toFixed(2)}</b> (${cashAdditions.length})
+      ${cashAdditions.map(a => {
+        const when = new Date(a.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+        return `<div class="dish-row"><div>${when}${a.deviceTag ? ' · ' + escapeHtml(a.deviceTag) : ''}${a.note ? ' — ' + escapeHtml(a.note) : ''}</div><div class="dp">${settings.currency} ${Number(a.amount||0).toFixed(2)}</div></div>`;
+      }).join('')}
+    </div>` : '';
+
+  if(salesLog.length === 0 && cashAdditions.length === 0){
+    el.innerHTML = floatRow + '<div class="empty-hint">Nessun ordine registrato dall\'ultima chiusura.</div>';
     return;
   }
   const { totals, grandTotal, orders } = aggregateSalesLog();
+  const expectedTotal = grandTotal + Number(cashFloat.amount||0) + additionsTotal;
   const rows = Object.keys(totals).sort().map(name => {
     const t = totals[name];
     return `<div class="dish-row"><div>${escapeHtml(name)} <span class="dp">x${t.qty}</span></div><div class="dp">${settings.currency} ${t.revenue.toFixed(2)}</div></div>`;
   }).join('');
   el.innerHTML = `
+    ${floatRow}
+    ${additionsRows}
     <div class="info-box" style="margin-bottom:14px;">
-      <b>${orders}</b> ordini registrati &middot; Incasso totale <b>${settings.currency} ${grandTotal.toFixed(2)}</b>
+      <b>${orders}</b> ordini registrati &middot; Incasso vendite <b>${settings.currency} ${grandTotal.toFixed(2)}</b>
+      ${(cashFloat.setAt || cashAdditions.length) ? `<br>Totale atteso in cassa (fondo + incasso + aggiunte): <b>${settings.currency} ${expectedTotal.toFixed(2)}</b>` : ''}
     </div>
     ${rows}
   `;
@@ -1483,11 +1774,21 @@ function renderChiusuraCassa(){
 
 function buildCloseSummaryHtmlPage(){
   const { totals, grandTotal, orders } = aggregateSalesLog();
+  const additionsTotal = cashAdditionsTotal();
+  const expectedTotal = grandTotal + Number(cashFloat.amount||0) + additionsTotal;
   const now = new Date();
   const rowsHtml = Object.keys(totals).sort().map(name => {
     const t = totals[name];
     return `<div class="line"><span>${escapeHtml(name)} x${t.qty}</span><span>${settings.currency} ${t.revenue.toFixed(2)}</span></div>`;
   }).join('');
+  const additionsHtml = cashAdditions.length ? `
+    <hr>
+    <div class="p-note" style="margin-bottom:6px;"><b>Contante aggiunto durante la serata</b></div>
+    ${cashAdditions.map(a => {
+      const when = new Date(a.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      return `<div class="line"><span>${when}${a.deviceTag ? ' · ' + escapeHtml(a.deviceTag) : ''}${a.note ? ' — ' + escapeHtml(a.note) : ''}</span><span>${settings.currency} ${Number(a.amount||0).toFixed(2)}</span></div>`;
+    }).join('')}
+    <div class="line"><span><b>Totale aggiunte</b></span><span><b>${settings.currency} ${additionsTotal.toFixed(2)}</b></span></div>` : '';
   return `
   <div class="print-page">
     <div class="p-head">
@@ -1499,12 +1800,17 @@ function buildCloseSummaryHtmlPage(){
     <div class="p-note" style="margin-bottom:6px;">${orders} ordini</div>
     ${rowsHtml}
     <hr>
-    <div class="total"><span>Incasso totale</span><span>${settings.currency} ${grandTotal.toFixed(2)}</span></div>
+    <div class="total"><span>Incasso vendite</span><span>${settings.currency} ${grandTotal.toFixed(2)}</span></div>
+    ${cashFloat.setAt ? `<hr><div class="p-note" style="margin-bottom:6px;"><b>Fondo cassa iniziale</b></div><div class="line"><span>${cashFloat.note ? escapeHtml(cashFloat.note) : 'Importo iniziale'}</span><span>${settings.currency} ${Number(cashFloat.amount||0).toFixed(2)}</span></div>` : ''}
+    ${additionsHtml}
+    ${(cashFloat.setAt || cashAdditions.length) ? `<div class="total"><span>Totale atteso in cassa</span><span>${settings.currency} ${expectedTotal.toFixed(2)}</span></div>` : ''}
   </div>`;
 }
 
 function buildCloseSummaryEscPos(){
   const { totals, grandTotal, orders } = aggregateSalesLog();
+  const additionsTotal = cashAdditionsTotal();
+  const expectedTotal = grandTotal + Number(cashFloat.amount||0) + additionsTotal;
   const now = new Date();
   let out = '';
   out += ESC + 'a' + '\x01';
@@ -1522,13 +1828,36 @@ function buildCloseSummaryEscPos(){
     out += left + ' '.repeat(pad) + right + '\n';
   });
   out += P_LINE + '\n';
-  out += ESC + 'E' + '\x01' + 'TOTALE'.padEnd(20) + textForPrinter(settings.currency) + ' ' + grandTotal.toFixed(2) + ESC + 'E' + '\x00' + '\n';
+  out += ESC + 'E' + '\x01' + 'INCASSO'.padEnd(20) + textForPrinter(settings.currency) + ' ' + grandTotal.toFixed(2) + ESC + 'E' + '\x00' + '\n';
+  if(cashFloat.setAt){
+    out += P_LINE + '\n';
+    out += textForPrinter('FONDO CASSA INIZIALE') + '\n';
+    out += textForPrinter((cashFloat.note || 'Importo iniziale')) + '\n';
+    out += textForPrinter('Fondo cassa'.padEnd(20) + textForPrinter(settings.currency) + ' ' + Number(cashFloat.amount||0).toFixed(2)) + '\n';
+  }
+  if(cashAdditions.length){
+    out += P_LINE + '\n';
+    out += textForPrinter('CONTANTE AGGIUNTO IN SERATA') + '\n';
+    cashAdditions.forEach(a => {
+      const when = new Date(a.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+      const left = textForPrinter(when + (a.deviceTag ? ' ' + a.deviceTag : ''));
+      const right = textForPrinter(settings.currency) + ' ' + Number(a.amount||0).toFixed(2);
+      const pad = Math.max(1, 32 - left.length - right.length);
+      out += left + ' '.repeat(pad) + right + '\n';
+      if(a.note) out += '  ' + textForPrinter(a.note) + '\n';
+    });
+    out += textForPrinter('Totale aggiunte'.padEnd(20) + textForPrinter(settings.currency) + ' ' + additionsTotal.toFixed(2)) + '\n';
+  }
+  if(cashFloat.setAt || cashAdditions.length){
+    out += P_LINE + '\n';
+    out += ESC + 'E' + '\x01' + 'TOTALE CASSA'.padEnd(20) + textForPrinter(settings.currency) + ' ' + expectedTotal.toFixed(2) + ESC + 'E' + '\x00' + '\n';
+  }
   out += cutFeedAndCut();
   return out;
 }
 
 document.getElementById('printCloseBtn').addEventListener('click', () => {
-  if(salesLog.length === 0){ flash('Nessun ordine da riepilogare'); return; }
+  if(salesLog.length === 0 && cashAdditions.length === 0 && !cashFloat.setAt){ flash('Nessun dato da riepilogare'); return; }
   if(settings.printMethod === 'rawbt'){
     sendViaRawBt(ESC + '@' + buildCloseSummaryEscPos());
     flash('Riepilogo inviato a RawBT');
@@ -1541,10 +1870,19 @@ document.getElementById('printCloseBtn').addEventListener('click', () => {
 });
 
 document.getElementById('resetCloseBtn').addEventListener('click', async () => {
-  if(salesLog.length === 0){ flash('Nessun ordine da azzerare'); return; }
-  if(!confirm(`Chiudere la cassa e azzerare i ${salesLog.length} ordini registrati? L'operazione non è reversibile.`)) return;
+  if(salesLog.length === 0 && cashAdditions.length === 0 && !cashFloat.setAt){ flash('Nessun dato da azzerare'); return; }
+  if(!confirm(`Chiudere la cassa e azzerare i ${salesLog.length} ordini registrati? Verranno azzerati anche il fondo cassa e le aggiunte di contante, da reimpostare per la prossima serata. L'operazione non è reversibile.`)) return;
   salesLog = [];
   await saveSalesLog();
+  cashFloat = { amount: 0, note: '', setAt: null };
+  await saveCashFloat();
+  cashAdditions = [];
+  safeSet('cash-additions', cashAdditions);
+  if(window.firebaseReady){
+    try{ await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/cashAdditions'), null); }
+    catch(e){ console.error('Firebase reset cashAdditions:', e); }
+  }
+  fillCashFloatForm();
   renderChiusuraCassa();
   flash('Cassa chiusa e azzerata');
 });
@@ -1564,45 +1902,49 @@ function isCategorySpacer3cm(cat){
   return settings.categorySpacer3cm[cat] === true;
 }
 
-function getKitchenTicketsList(){
+function getKitchenTicketsForLines(lines){
   let tickets = [];
-  order.forEach(l => {
-    const dish = menu.find(m => m.id === l.dishId);
+  (lines || []).forEach(l => {
+    const dish = menu.find(m => m.id === l.dishId) || menu.find(m => m.name === l.name);
     if(!dish) return;
-    const cat = dishCategory(l.dishId);
+    const cat = dishCategory(dish.id);
     if(!isCategoryPrintable(cat)) return;
 
     if(dish.type === 'combo'){
-      for(let u = 0; u < l.qty; u++){
+      for(let u = 0; u < Number(l.qty||0); u++){
         (dish.items || []).forEach(compName => {
           tickets.push({name:compName, qty:1, note:l.note, price:0, noPrice:true, spacer3cm:isCategorySpacer3cm(cat)});
         });
       }
     }else if(isCategoryCumulative(cat)){
-      tickets.push({name:l.name, qty:l.qty, note:l.note, price:l.price, spacer3cm:isCategorySpacer3cm(cat)});
+      tickets.push({name:l.name, qty:Number(l.qty||0), note:l.note, price:Number(l.price||0), spacer3cm:isCategorySpacer3cm(cat)});
     }else{
-      for(let i=0;i<l.qty;i++){
-        tickets.push({name:l.name, qty:1, note:l.note, price:l.price, spacer3cm:isCategorySpacer3cm(cat)});
+      for(let i=0;i<Number(l.qty||0);i++){
+        tickets.push({name:l.name, qty:1, note:l.note, price:Number(l.price||0), spacer3cm:isCategorySpacer3cm(cat)});
       }
     }
   });
   return tickets;
 }
 
-function ticketMetaStr(orderNum, now){
-  const dateStr = now.toLocaleDateString('it-IT');
-  const timeStr = now.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-  return '#' + String(orderNum).padStart(4,'0') + ' · ' + dateStr + ' ' + timeStr;
+function getKitchenTicketsList(){
+  return getKitchenTicketsForLines(order);
 }
 
-function renderKitchenPage(ticket, orderNum, now){
+function ticketMetaStr(orderNum, now, tag){
+  const dateStr = now.toLocaleDateString('it-IT');
+  const timeStr = now.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+  return '#' + formatTicketNum(orderNum, tag) + ' · ' + dateStr + ' ' + timeStr;
+}
+
+function renderKitchenPage(ticket, orderNum, now, tag){
   const priceLine = (settings.showPricesKitchen && !ticket.noPrice)
     ? `<div class="line"><span>${ticket.qty}x ${escapeHtml(ticket.name)}</span><span>${settings.currency} ${(ticket.price*ticket.qty).toFixed(2)}</span></div>`
     : '';
   return `
   <div class="print-page${ticket.spacer3cm ? ' spacer-top' : ''}">
     <div class="p-head">
-      <div class="ticket-number">#${String(orderNum).padStart(4,'0')}</div>
+      <div class="ticket-number">#${formatTicketNum(orderNum, tag)}</div>
       <div class="meta">${now.toLocaleDateString('it-IT')} · ${now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>
     </div>
     <hr>
@@ -1612,7 +1954,7 @@ function renderKitchenPage(ticket, orderNum, now){
   </div>`;
 }
 
-function renderSummaryPage(lines, orderNum, now){
+function renderSummaryPage(lines, orderNum, now, tag){
   const linesHtml = lines.map(l => `
     <div class="line">
       <span>${l.qty}x ${escapeHtml(l.name)}</span>
@@ -1626,7 +1968,7 @@ function renderSummaryPage(lines, orderNum, now){
     <div class="p-head">
       <div class="biz">${escapeHtml(settings.bizName)}</div>
       <div class="kind">Scontrino riepilogativo</div>
-      <div class="ticket-number">#${String(orderNum).padStart(4,'0')}</div>
+      <div class="ticket-number">#${formatTicketNum(orderNum, tag)}</div>
       <div class="meta">${now.toLocaleDateString('it-IT')} · ${now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>
     </div>
     <hr>
@@ -1671,12 +2013,12 @@ function cutFeedAndCut(){
   return out;
 }
 
-function buildKitchenEscPos(ticket, orderNum, now){
+function buildKitchenEscPos(ticket, orderNum, now, tag){
   let out = '';
   if(ticket.spacer3cm) out += '\n'.repeat(8); // circa 3 cm su una termica standard
   out += ESC + 'a' + '\x01';
   out += GS + '!' + '\x11';
-  out += textForPrinter('#' + String(orderNum).padStart(4,'0')) + '\n';
+  out += textForPrinter('#' + formatTicketNum(orderNum, tag)) + '\n';
   out += GS + '!' + '\x00';
   out += textForPrinter(now.toLocaleDateString('it-IT') + ' · ' + now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})) + '\n';
   out += P_LINE + '\n';
@@ -1688,13 +2030,13 @@ function buildKitchenEscPos(ticket, orderNum, now){
   out += cutFeedAndCut();
   return out;
 }
-function buildSummaryEscPos(lines, orderNum, now){
+function buildSummaryEscPos(lines, orderNum, now, tag){
   let out = '';
   out += ESC + 'a' + '\x01';
   out += ESC + 'E' + '\x01' + textForPrinter(settings.bizName) + '\n' + ESC + 'E' + '\x00';
   out += 'SCONTRINO RIEPILOGATIVO\n';
   out += GS + '!' + '\x11';
-  out += textForPrinter('#' + String(orderNum).padStart(4,'0')) + '\n';
+  out += textForPrinter('#' + formatTicketNum(orderNum, tag)) + '\n';
   out += GS + '!' + '\x00';
   out += textForPrinter(now.toLocaleDateString('it-IT') + ' · ' + now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})) + '\n';
   out += P_LINE + '\n';
@@ -1766,24 +2108,26 @@ function ensurePrintPageStyle(){
 async function printReceipt(sale){
   if(!sale) return false;
   const orderNum = sale.orderNum;
+  const tag = sale.deviceTag || getDeviceTag();
   const lines = Array.isArray(sale.lines) ? sale.lines : [];
   const now = sale.ts ? new Date(sale.ts) : new Date();
+  const label = formatTicketNum(orderNum, tag);
 
   if(settings.printMethod === 'rawbt'){
-    const payload = ESC + '@' + buildSummaryEscPos(lines, orderNum, now);
+    const payload = ESC + '@' + buildSummaryEscPos(lines, orderNum, now, tag);
     const result = await sendViaRawBtAndWait(payload);
     if(!result.ok){
       flash('Ristampa non riuscita: RawBT non è disponibile.', true);
       return false;
     }
-    flash('Scontrino #' + String(orderNum).padStart(4,'0') + ' ristampato via RawBT');
+    flash('Scontrino #' + label + ' ristampato via RawBT');
     return true;
   }
 
   ensurePrintPageStyle();
-  document.getElementById('printArea').innerHTML = renderSummaryPage(lines, orderNum, now);
+  document.getElementById('printArea').innerHTML = renderSummaryPage(lines, orderNum, now, tag);
   window.print();
-  flash('Scontrino #' + String(orderNum).padStart(4,'0') + ' ristampato');
+  flash('Scontrino #' + label + ' ristampato');
   return true;
 }
 
@@ -1800,13 +2144,14 @@ document.getElementById('printOrderBtn').addEventListener('click', async () => {
   try{
     const now = new Date();
     const orderNum = await reserveTicketNumber();
+    const tag = getDeviceTag();
     const kitchenTickets = getKitchenTicketsList();
 
     if(settings.printMethod === 'rawbt'){
       let payload = ESC + '@'; // init stampante
-      kitchenTickets.forEach(t => { payload += buildKitchenEscPos(t, orderNum, now); });
+      kitchenTickets.forEach(t => { payload += buildKitchenEscPos(t, orderNum, now, tag); });
       if(settings.autoSummary){
-        payload += buildSummaryEscPos(order, orderNum, now);
+        payload += buildSummaryEscPos(order, orderNum, now, tag);
       }
       const result = await sendViaRawBtAndWait(payload);
       if(!result.ok){
@@ -1817,9 +2162,9 @@ document.getElementById('printOrderBtn').addEventListener('click', async () => {
       }
       flash('Talloncini inviati a RawBT');
     }else{
-      let pagesHtml = kitchenTickets.map(t => renderKitchenPage(t, orderNum, now)).join('');
+      let pagesHtml = kitchenTickets.map(t => renderKitchenPage(t, orderNum, now, tag)).join('');
       if(settings.autoSummary){
-        pagesHtml += renderSummaryPage(order, orderNum, now);
+        pagesHtml += renderSummaryPage(order, orderNum, now, tag);
       }
       ensurePrintPageStyle();
       document.getElementById('printArea').innerHTML = pagesHtml;
@@ -1831,7 +2176,7 @@ document.getElementById('printOrderBtn').addEventListener('click', async () => {
     order = [];
     clearOrderDraft();
     renderOrderCashier();
-    document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
+    document.getElementById('nextTicketLabel').textContent = '#' + formatTicketNum(ticketCounter, getDeviceTag());
   }finally{
     btn.dataset.printing = '0';
     // Riallinea sempre lo stato del pulsante al contenuto reale dell'ordine:
@@ -1840,6 +2185,226 @@ document.getElementById('printOrderBtn').addEventListener('click', async () => {
     renderOrderCashier();
   }
 });
+
+
+// ================= MODIFICA ORDINE =================
+let saleEditorSale = null;
+let saleEditorDraft = [];
+
+function cloneSaleLines(lines){
+  return (lines || []).map(l => ({
+    dishId: l.dishId || '',
+    name: l.name || '',
+    qty: Math.max(0, Number(l.qty)||0),
+    price: Number(l.price)||0,
+    note: l.note || ''
+  })).filter(l => l.qty > 0);
+}
+
+function saleLineKey(line){
+  return String(line.dishId || line.name || '') + '|' + String(line.note || '');
+}
+
+function positiveLineDelta(beforeLines, afterLines){
+  const before = {};
+  const after = {};
+  (beforeLines || []).forEach(l => before[saleLineKey(l)] = (before[saleLineKey(l)]||0) + (Number(l.qty)||0));
+  (afterLines || []).forEach(l => after[saleLineKey(l)] = (after[saleLineKey(l)]||0) + (Number(l.qty)||0));
+
+  const result = [];
+  (afterLines || []).forEach(l => {
+    const key = saleLineKey(l);
+    const alreadyAccounted = result.filter(x => saleLineKey(x) === key).reduce((s,x) => s + x.qty, 0);
+    const wanted = Math.max(0, (after[key]||0) - (before[key]||0) - alreadyAccounted);
+    if(wanted > 0){
+      result.push({ ...l, qty:wanted });
+    }
+  });
+  return result;
+}
+
+function getLatestEditableSale(){
+  return salesLog.filter(s => s && !s.voided).sort((a,b) => new Date(b.ts) - new Date(a.ts))[0] || null;
+}
+
+function renderLastOrderShortcut(){
+  const btn = document.getElementById('editLastOrderBtn');
+  const meta = document.getElementById('lastOrderMeta');
+  if(!btn || !meta) return;
+  const sale = getLatestEditableSale();
+  if(!sale){
+    btn.disabled = true;
+    meta.textContent = 'Nessun ultimo ordine modificabile.';
+    return;
+  }
+  btn.disabled = false;
+  const label = formatTicketNum(sale.orderNum, sale.deviceTag);
+  const qty = (sale.lines||[]).reduce((s,l) => s + (Number(l.qty)||0), 0);
+  meta.textContent = `Ultimo: #${label} · ${qty} articoli · ${settings.currency} ${Number(sale.total||0).toFixed(2)}`;
+}
+
+function editorDishOptions(){
+  return menu.filter(d => d.showInCashier !== false).map(d => `<option value="${escapeHtml(d.id)}">${escapeHtml(d.name)} · ${settings.currency} ${Number(d.price||0).toFixed(2)}</option>`).join('');
+}
+
+function renderSaleEditor(){
+  const body = document.getElementById('saleEditBody');
+  if(!body || !saleEditorSale) return;
+  const label = formatTicketNum(saleEditorSale.orderNum, saleEditorSale.deviceTag);
+  document.getElementById('saleEditTitle').textContent = '#' + label;
+
+  const rows = saleEditorDraft.length ? saleEditorDraft.map((l, idx) => `
+    <div class="admin-history-detail-line" style="grid-template-columns:1fr auto auto;align-items:center;gap:8px;">
+      <span>${escapeHtml(l.name)}${l.note ? `<div style="font-size:11px;color:var(--text-dim);font-style:italic;">— ${escapeHtml(l.note)}</div>` : ''}</span>
+      <div class="qtystep">
+        <button type="button" class="icon-btn sale-edit-minus" data-index="${idx}">−</button>
+        <strong>${Number(l.qty)||0}</strong>
+        <button type="button" class="icon-btn sale-edit-plus" data-index="${idx}">+</button>
+      </div>
+      <button type="button" class="rm-btn sale-edit-remove" data-index="${idx}">Elimina</button>
+    </div>`).join('') : `<div class="empty-hint">L'ordine è vuoto. Aggiungi almeno un piatto.</div>`;
+
+  const total = saleEditorDraft.reduce((s,l) => s + (Number(l.price)||0)*(Number(l.qty)||0), 0);
+  body.innerHTML = `
+    <div class="muted" style="margin:10px 0 8px;">${new Date(saleEditorSale.ts).toLocaleString('it-IT')}</div>
+    ${rows}
+    <div class="admin-history-detail-total"><span>NUOVO TOTALE</span><span>${settings.currency} ${total.toFixed(2)}</span></div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
+      <label>Aggiungi piatto</label>
+      <div style="display:grid;grid-template-columns:1fr 84px auto;gap:8px;align-items:end;">
+        <select id="saleEditDishSelect" style="margin:0;">${editorDishOptions()}</select>
+        <input id="saleEditDishQty" type="number" min="1" step="1" value="1" style="margin:0;">
+        <button type="button" id="saleEditAddDishBtn" class="btn-teal" style="padding:9px 12px;">+ Aggiungi</button>
+      </div>
+      <div class="hint" style="margin-top:8px;font-size:11px;color:var(--text-dim);">Le diminuzioni aggiornano subito i totali. Le nuove quantità positive vengono stampate come talloncini aggiuntivi dopo il salvataggio.</div>
+    </div>`;
+
+  body.querySelectorAll('.sale-edit-minus').forEach(btn => btn.addEventListener('click', () => {
+    const i = Number(btn.dataset.index);
+    if(!saleEditorDraft[i]) return;
+    saleEditorDraft[i].qty -= 1;
+    if(saleEditorDraft[i].qty <= 0) saleEditorDraft.splice(i,1);
+    renderSaleEditor();
+  }));
+  body.querySelectorAll('.sale-edit-plus').forEach(btn => btn.addEventListener('click', () => {
+    const i = Number(btn.dataset.index);
+    if(!saleEditorDraft[i]) return;
+    saleEditorDraft[i].qty += 1;
+    renderSaleEditor();
+  }));
+  body.querySelectorAll('.sale-edit-remove').forEach(btn => btn.addEventListener('click', () => {
+    saleEditorDraft.splice(Number(btn.dataset.index),1);
+    renderSaleEditor();
+  }));
+  document.getElementById('saleEditAddDishBtn')?.addEventListener('click', () => {
+    const id = document.getElementById('saleEditDishSelect')?.value;
+    const qty = Math.max(1, parseInt(document.getElementById('saleEditDishQty')?.value || '1',10));
+    const d = menu.find(x => x.id === id);
+    if(!d) return;
+    const existing = saleEditorDraft.find(l => (l.dishId || '') === d.id && !l.note);
+    if(existing) existing.qty += qty;
+    else saleEditorDraft.push({dishId:d.id,name:d.name,price:Number(d.price)||0,qty,note:''});
+    renderSaleEditor();
+  });
+}
+
+function openSaleEditor(sale){
+  if(!sale || sale.voided) return;
+  saleEditorSale = sale;
+  saleEditorDraft = cloneSaleLines(Array.isArray(sale.lines) ? sale.lines : []);
+  // Storico precedente all'introduzione di dishId: ricostruiamo l'ID quando possibile.
+  saleEditorDraft.forEach(l => { if(!l.dishId){ const d = menu.find(x => x.name === l.name); if(d) l.dishId = d.id; } });
+  renderSaleEditor();
+  document.getElementById('saleEditModal').style.display = 'flex';
+}
+
+function closeSaleEditor(){
+  document.getElementById('saleEditModal').style.display = 'none';
+  saleEditorSale = null;
+  saleEditorDraft = [];
+}
+
+function validateEditedSaleLimits(sale, lines){
+  const soldOutside = {};
+  salesLog.forEach(s => {
+    if(!s || s === sale || s.voided) return;
+    (s.lines||[]).forEach(l => {
+      const d = menu.find(x => x.id === l.dishId) || menu.find(x => x.name === l.name);
+      if(!d || !d.maxQty) return;
+      soldOutside[d.id] = (soldOutside[d.id]||0) + (Number(l.qty)||0);
+    });
+  });
+  const newQty = {};
+  (lines||[]).forEach(l => {
+    const d = menu.find(x => x.id === l.dishId) || menu.find(x => x.name === l.name);
+    if(d && d.maxQty) newQty[d.id] = (newQty[d.id]||0) + (Number(l.qty)||0);
+  });
+  for(const id of Object.keys(newQty)){
+    const d = menu.find(x => x.id === id);
+    if(d && soldOutside[id] + newQty[id] > d.maxQty){
+      return `"${d.name}" supererebbe il limite di ${d.maxQty} pezzi (${soldOutside[id] + newQty[id]}).`;
+    }
+  }
+  return null;
+}
+
+async function printAddedSaleLines(lines, sale){
+  const tickets = getKitchenTicketsForLines(lines);
+  if(!tickets.length) return {ok:true, printed:0};
+  const now = new Date();
+  const orderNum = sale.orderNum;
+  const tag = sale.deviceTag || getDeviceTag();
+  if(settings.printMethod === 'rawbt'){
+    let payload = ESC + '@';
+    tickets.forEach(t => { payload += buildKitchenEscPos(t, orderNum, now, tag); });
+    const result = await sendViaRawBtAndWait(payload);
+    return {ok:!!result.ok, printed:tickets.length};
+  }
+  ensurePrintPageStyle();
+  document.getElementById('printArea').innerHTML = tickets.map(t => renderKitchenPage(t, orderNum, now, tag)).join('');
+  window.print();
+  return {ok:true, printed:tickets.length};
+}
+
+async function saveEditedSale(){
+  const sale = saleEditorSale;
+  if(!sale) return;
+  if(!saleEditorDraft.length){ flash('L\'ordine non può restare vuoto.', true); return; }
+  const limitError = validateEditedSaleLimits(sale, saleEditorDraft);
+  if(limitError){ flash(limitError, true); return; }
+
+  const before = cloneSaleLines(sale.lines || []);
+  const after = cloneSaleLines(saleEditorDraft);
+  const added = positiveLineDelta(before, after);
+  const changed = JSON.stringify(before) !== JSON.stringify(after);
+  if(!changed){ closeSaleEditor(); return; }
+
+  const printResult = await printAddedSaleLines(added, sale);
+  if(!printResult.ok){
+    flash('Modifica non salvata: la stampa dei talloncini aggiunti non è riuscita.', true);
+    return;
+  }
+
+  const beforeTotal = before.reduce((s,l) => s + (Number(l.price)||0)*(Number(l.qty)||0), 0);
+  sale.lines = after;
+  sale.total = after.reduce((s,l) => s + (Number(l.price)||0)*(Number(l.qty)||0), 0);
+  sale.modifiedAt = new Date().toISOString();
+  sale.lastEdit = { added, beforeTotal, afterTotal: sale.total, modifiedAt: sale.modifiedAt };
+
+  const idx = salesLog.findIndex(x => x === sale || saleKey(x) === saleKey(sale));
+  if(idx !== -1) salesLog[idx] = sale;
+  salesLog.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  const saved = await saveSaleEntry(sale);
+  renderDishGrid();
+  renderChiusuraCassa();
+  window.renderAdminHistory?.();
+  renderLastOrderShortcut();
+  closeSaleEditor();
+  if(saved) flash(added.length ? `Ordine #${formatTicketNum(sale.orderNum,sale.deviceTag)} aggiornato: ${added.reduce((s,l)=>s+l.qty,0)} talloncini aggiunti.` : `Ordine #${formatTicketNum(sale.orderNum,sale.deviceTag)} aggiornato.`);
+  else showDataWarning('Ordine modificato localmente, ma non ancora sincronizzato con Firebase.');
+}
+
+document.getElementById('editLastOrderBtn')?.addEventListener('click', () => openSaleEditor(getLatestEditableSale()));
 
 // ================= ADMIN LOGIN =================
 document.getElementById('openAdminBtn').addEventListener('click', () => {
@@ -1939,6 +2504,18 @@ function renderMenuAdmin(){
             <input type="checkbox" class="cashier-dish-toggle" data-id="${d.id}" ${(d.showInCashier !== false) ? 'checked' : ''}>
             Cassa
           </label>
+          <label style="display:flex;align-items:center;gap:5px;margin:0;font-size:11px;color:var(--text-dim);cursor:pointer;" title="Mostra sotto al piatto, in cassa, quanti ne sono stati venduti in questa serata">
+            <input type="checkbox" class="dish-counter-toggle" data-id="${d.id}" ${d.showSalesCounter ? 'checked' : ''}>
+            Contatore
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;margin:0;font-size:11px;color:var(--text-dim);cursor:pointer;" title="Mostra in cassa un countdown separato per questo piatto.">
+            <input type="checkbox" class="dish-countdown-toggle" data-id="${d.id}" ${d.showCountdown ? 'checked' : ''}>
+            Countdown
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;margin:0;font-size:11px;color:var(--text-dim);" title="Numero massimo di pezzi vendibili in questa serata. Il countdown usa questo limite.">
+            Max
+            <input type="number" class="dish-maxqty-input" data-id="${d.id}" min="0" step="1" value="${d.maxQty ? d.maxQty : ''}" placeholder="—" style="width:56px; margin:0; padding:4px 6px; font-size:11px;">
+          </label>
           <button class="btn-teal" onclick="editDish('${d.id}')">Modifica</button>
           <button class="btn-red" onclick="deleteDish('${d.id}')">Elimina</button>
         </div>
@@ -1964,6 +2541,34 @@ document.addEventListener('change', async (e) => {
       d.showInCashier = e.target.checked;
       await saveMenu();
       renderCashier();
+    }
+  }
+  if(e.target.classList.contains('dish-counter-toggle')){
+    const d = menu.find(x => x.id === e.target.dataset.id);
+    if(d){
+      d.showSalesCounter = e.target.checked;
+      await saveMenu();
+      renderCashier();
+    }
+  }
+  if(e.target.classList.contains('dish-countdown-toggle')){
+    const d = menu.find(x => x.id === e.target.dataset.id);
+    if(d){
+      d.showCountdown = e.target.checked;
+      await saveMenu();
+      renderCashier();
+      renderMenuAdmin();
+    }
+  }
+  if(e.target.classList.contains('dish-maxqty-input')){
+    const d = menu.find(x => x.id === e.target.dataset.id);
+    if(d){
+      const v = parseInt(e.target.value, 10);
+      d.maxQty = (Number.isFinite(v) && v > 0) ? v : 0;
+      if(d.maxQty > 0) d.showCountdown = true;
+      await saveMenu();
+      renderCashier();
+      renderMenuAdmin();
     }
   }
 });
@@ -2005,7 +2610,7 @@ document.getElementById('addDishBtn').addEventListener('click', async () => {
     if(items.length < 2){ flash('Aggiungi almeno 2 piatti al gruppo'); return; }
   }
 
-  menu.push({ id: uid(), name, price, cat, type, items, showInCashier: true });
+  menu.push({ id: uid(), name, price, cat, type, items, showInCashier: true, showSalesCounter: false, showCountdown: false, maxQty: 0 });
   document.getElementById('newDishName').value = '';
   document.getElementById('newDishPrice').value = '';
   document.getElementById('newDishCat').value = '';
@@ -2164,6 +2769,9 @@ function normalizeSettings(){
   if(!settings.rawbtCutFeedLines) settings.rawbtCutFeedLines = 5;
   menu.forEach(d => {
     if(typeof d.showInCashier !== 'boolean') d.showInCashier = true;
+    if(typeof d.showSalesCounter !== 'boolean') d.showSalesCounter = false;
+    if(typeof d.showCountdown !== 'boolean') d.showCountdown = !!d.maxQty;
+    if(typeof d.maxQty !== 'number' || d.maxQty < 0) d.maxQty = 0; // 0 = nessun limite
   });
   applyTheme();
 }
@@ -2183,7 +2791,26 @@ function fillSettingsForm(){
   document.getElementById('cutFeedWrap').style.display = settings.rawbtCut ? 'block' : 'none';
   document.getElementById('setTheme').value = settings.theme || 'dark';
   applyTheme();
-  document.getElementById('counterPreview').textContent = '#' + String(ticketCounter).padStart(4,'0');
+  document.getElementById('setDeviceTag').value = getDeviceTag();
+  document.getElementById('counterPreview').textContent = '#' + formatTicketNum(ticketCounter, getDeviceTag());
+}
+
+function fillCashFloatForm(){
+  const amountEl = document.getElementById('setCashFloat');
+  const noteEl = document.getElementById('setCashFloatNote');
+  const currentEl = document.getElementById('cashFloatCurrent');
+  if(!amountEl) return;
+  amountEl.value = cashFloat.amount ? cashFloat.amount : '';
+  noteEl.value = cashFloat.note || '';
+  if(currentEl){
+    if(cashFloat.setAt){
+      const when = new Date(cashFloat.setAt).toLocaleString('it-IT');
+      currentEl.innerHTML = `Fondo cassa attuale: <b>${settings.currency} ${Number(cashFloat.amount||0).toFixed(2)}</b> · impostato il ${when}${cashFloat.note ? '<br>Nota: ' + escapeHtml(cashFloat.note) : ''}`;
+    } else {
+      currentEl.innerHTML = 'Nessun fondo cassa impostato per questa serata.';
+    }
+  }
+  renderCashAdditionsList();
 }
 
 document.getElementById('setRawbtCut').addEventListener('change', (e) => {
@@ -2226,13 +2853,168 @@ document.getElementById('saveSettingsBtn').addEventListener('click', async () =>
   setTimeout(() => st.textContent = '', 2500);
 });
 
+async function saveCashFloat(){
+  const localOk = safeSet('cash-float', cashFloat);
+  if(!window.firebaseReady) return localOk;
+  try{
+    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/cashFloat'), cashFloat);
+    return true;
+  }catch(e){
+    console.error('Firebase saveCashFloat:', e);
+    showDataWarning('Fondo cassa salvato localmente, ma non sincronizzato con Firebase.');
+    return localOk;
+  }
+}
+
+document.getElementById('saveCashFloatBtn').addEventListener('click', async () => {
+  const amountRaw = document.getElementById('setCashFloat').value;
+  const amount = Math.max(0, parseFloat(String(amountRaw).replace(',', '.')) || 0);
+  const note = document.getElementById('setCashFloatNote').value.trim();
+
+  cashFloat = { amount, note, setAt: new Date().toISOString() };
+  const saved = await saveCashFloat();
+  fillCashFloatForm();
+  if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
+
+  const st = document.getElementById('cashFloatStatus');
+  st.textContent = saved ? 'Fondo cassa salvato.' : 'Fondo cassa salvato solo localmente (Firebase non disponibile).';
+  st.style.color = saved ? 'var(--green)' : 'var(--red)';
+  setTimeout(() => st.textContent = '', 3000);
+});
+
+// ---------- CONTANTE AGGIUNTO DURANTE LA SERATA ----------
+// Ogni aggiunta è un evento a sé (non un totale unico da sovrascrivere):
+// usiamo push() per una chiave univoca, così due dispositivi che registrano
+// un'aggiunta nello stesso momento non si cancellano mai a vicenda, esattamente
+// come per le vendite.
+function cashAdditionsTotal(){
+  return cashAdditions.reduce((s,a) => s + (Number(a.amount)||0), 0);
+}
+
+async function addCashAdditionEntry(amount, note){
+  const entry = {
+    amount, note: note || '',
+    ts: new Date().toISOString(),
+    deviceId: getDeviceId(),
+    deviceTag: getDeviceTag()
+  };
+  cashAdditions.push(entry);
+  cashAdditions.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  safeSet('cash-additions', cashAdditions);
+
+  if(!window.firebaseReady){
+    showDataWarning('Aggiunta di cassa salvata solo localmente (Firebase non disponibile).');
+    return entry;
+  }
+  try{
+    const newRef = FirebaseCassa.push(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/cashAdditions'));
+    await FirebaseCassa.set(newRef, entry);
+    entry._fbKey = newRef.key;
+  }catch(e){
+    console.error('Firebase addCashAdditionEntry:', e);
+    showDataWarning('Aggiunta di cassa salvata solo localmente, non ancora sincronizzata.');
+  }
+  return entry;
+}
+
+async function removeCashAdditionEntry(entry){
+  cashAdditions = cashAdditions.filter(a => a !== entry);
+  safeSet('cash-additions', cashAdditions);
+  if(window.firebaseReady && entry._fbKey){
+    try{
+      await FirebaseCassa.remove(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/cashAdditions/' + entry._fbKey));
+    }catch(e){
+      console.error('Firebase removeCashAdditionEntry:', e);
+      showDataWarning('Eliminazione non sincronizzata con Firebase (verrà ripristinata alla prossima connessione).');
+    }
+  }
+}
+
+function renderCashAdditionsList(){
+  const el = document.getElementById('cashAdditionsList');
+  if(!el) return;
+  if(cashAdditions.length === 0){
+    el.innerHTML = '<div class="empty-hint">Nessuna aggiunta registrata per questa serata.</div>';
+    return;
+  }
+  const rows = cashAdditions.map((a, i) => {
+    const when = new Date(a.ts).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    const tag = a.deviceTag ? ` · ${escapeHtml(a.deviceTag)}` : '';
+    return `<div class="dish-row">
+      <div>${settings.currency} ${Number(a.amount||0).toFixed(2)} <span class="dp">${when}${tag}</span>${a.note ? '<br><span class="dp">' + escapeHtml(a.note) + '</span>' : ''}</div>
+      <button type="button" class="btn-red" data-idx="${i}" style="padding:6px 10px; font-size:12px;">Elimina</button>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="info-box" style="margin-bottom:10px;">Totale aggiunte: <b>${settings.currency} ${cashAdditionsTotal().toFixed(2)}</b> (${cashAdditions.length})</div>
+    ${rows}
+  `;
+  el.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const entry = cashAdditions[Number(btn.dataset.idx)];
+      if(!entry) return;
+      if(!confirm(`Eliminare l'aggiunta di ${settings.currency} ${Number(entry.amount||0).toFixed(2)}?`)) return;
+      await removeCashAdditionEntry(entry);
+      renderCashAdditionsList();
+      if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
+    });
+  });
+}
+
+document.getElementById('addCashBtn').addEventListener('click', async () => {
+  const amountRaw = document.getElementById('addCashAmount').value;
+  const amount = Math.max(0, parseFloat(String(amountRaw).replace(',', '.')) || 0);
+  const note = document.getElementById('addCashNote').value.trim();
+  const st = document.getElementById('cashAdditionsStatus');
+
+  if(amount <= 0){
+    st.textContent = 'Inserisci un importo maggiore di zero.';
+    st.style.color = 'var(--red)';
+    setTimeout(() => st.textContent = '', 2500);
+    return;
+  }
+
+  await addCashAdditionEntry(amount, note);
+  document.getElementById('addCashAmount').value = '';
+  document.getElementById('addCashNote').value = '';
+  renderCashAdditionsList();
+  if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
+
+  st.textContent = `Aggiunti ${settings.currency} ${amount.toFixed(2)} al fondo cassa.`;
+  st.style.color = 'var(--green)';
+  setTimeout(() => st.textContent = '', 2500);
+});
+
 document.getElementById('resetCounterBtn').addEventListener('click', async () => {
-  if(!confirm('Reimpostare il contatore ordini a #0001?')) return;
+  if(!confirm('Reimpostare il contatore ordini a #0001 su questo dispositivo?')) return;
   ticketCounter = 1;
   await saveCounter();
-  document.getElementById('counterPreview').textContent = '#0001';
-  document.getElementById('nextTicketLabel').textContent = '#0001';
+  document.getElementById('counterPreview').textContent = '#' + formatTicketNum(1, getDeviceTag());
+  document.getElementById('nextTicketLabel').textContent = '#' + formatTicketNum(1, getDeviceTag());
   flash('Contatore reimpostato');
+});
+
+document.getElementById('saveDeviceTagBtn').addEventListener('click', async () => {
+  const input = document.getElementById('setDeviceTag');
+  const st = document.getElementById('deviceTagStatus');
+  st.textContent = 'Verifica in corso...';
+  st.style.color = 'var(--text-dim)';
+
+  const result = await setDeviceTag(input.value);
+  if(!result.ok){
+    st.textContent = result.error;
+    st.style.color = 'var(--red)';
+    return;
+  }
+
+  input.value = getDeviceTag();
+  document.getElementById('counterPreview').textContent = '#' + formatTicketNum(ticketCounter, getDeviceTag());
+  document.getElementById('nextTicketLabel').textContent = '#' + formatTicketNum(ticketCounter, getDeviceTag());
+  st.textContent = result.offline
+    ? `Etichetta "${getDeviceTag()}" salvata solo localmente: non è stato possibile verificarne l'unicità online. Assicurati che nessun altro dispositivo usi la stessa etichetta.`
+    : `Etichetta "${getDeviceTag()}" salvata e verificata.`;
+  st.style.color = result.offline ? 'var(--red)' : 'var(--green)';
+  setTimeout(() => { st.textContent = ''; }, result.offline ? 6000 : 3000);
 });
 
 document.getElementById('saveCredsBtn').addEventListener('click', async () => {
@@ -2340,9 +3122,27 @@ loadAll();
     </div>
     <div id="adminHistoryDetailBody"></div>
     <div class="admin-history-modal-actions">
+      <button type="button" id="adminHistoryEditBtn" class="btn-teal">✎ Modifica ordine</button>
       <button type="button" id="adminHistoryVoidBtn" class="btn-red">Annulla ordine</button>
       <button type="button" id="adminHistoryReprintBtn">🖨️ Ristampa scontrino</button>
       <button type="button" id="adminHistoryCloseDetail2" class="secondary">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<div id="saleEditModal" class="admin-history-modal" style="display:none;">
+  <div class="admin-history-modal-card">
+    <div class="admin-history-modal-head">
+      <div>
+        <div class="muted">Modifica ordine</div>
+        <h2 id="saleEditTitle">#0000</h2>
+      </div>
+      <button type="button" id="saleEditCloseBtn" class="icon-btn">✕</button>
+    </div>
+    <div id="saleEditBody"></div>
+    <div class="admin-history-modal-actions">
+      <button type="button" id="saleEditCancelBtn" class="secondary">Annulla</button>
+      <button type="button" id="saleEditSaveBtn" class="btn-amber">Salva modifiche</button>
     </div>
   </div>
 </div>
@@ -2373,6 +3173,13 @@ loadAll();
   function ahNumber(sale) {
     const n = Number(sale && sale.orderNum);
     return Number.isFinite(n) ? n : 0;
+  }
+
+  // Codice scontrino completo mostrato/cercato nello storico, es. "A-0007".
+  // Le vendite storiche salvate prima dell'introduzione delle etichette non
+  // hanno "deviceTag": in quel caso si mostra solo il numero, invariato.
+  function ahLabel(sale) {
+    return formatTicketNum(ahNumber(sale), sale && sale.deviceTag);
   }
 
   function ahDate(sale) {
@@ -2412,7 +3219,7 @@ loadAll();
 
   function ahFiltered() {
     const search = (document.getElementById('adminHistorySearch')?.value || '')
-      .trim().toLowerCase().replace(/^#/, '');
+      .trim().toLowerCase().replace(/^#/, '').replace(/\s+/g,'');
     const from = document.getElementById('adminHistoryDateFrom')?.value || '';
     const to = document.getElementById('adminHistoryDateTo')?.value || '';
 
@@ -2420,25 +3227,30 @@ loadAll();
     return source
       .filter(Boolean)
       .filter(sale => {
-        if (search && !String(ahNumber(sale)).includes(search)) return false;
+        if (search){
+          const label = ahLabel(sale).toLowerCase();
+          const bare = String(ahNumber(sale));
+          if (!label.includes(search) && !bare.includes(search)) return false;
+        }
         const key = ahDateKey(sale);
         if (from && (!key || key < from)) return false;
         if (to && (!key || key > to)) return false;
         return true;
       })
-      .sort((a,b) => ahNumber(b)-ahNumber(a));
+      .sort((a,b) => (ahDate(b)?.getTime()||0) - (ahDate(a)?.getTime()||0));
   }
 
-  // Numeri scontrino che compaiono più di una volta nell'intero registro
-  // (non solo nella vista filtrata) — capita se due dispositivi erano
-  // entrambi offline e hanno assegnato lo stesso numero. Nessun dato viene
-  // perso (ogni dispositivo salva sotto una propria chiave), ma è giusto
-  // segnalarlo bene in vista, così chi gestisce la cassa se ne accorge ed
-  // eventualmente annulla il doppione sbagliato.
+  // Codici scontrino completi (etichetta+numero) che compaiono più di una
+  // volta nell'intero registro. Da quando ogni dispositivo antepone la
+  // propria etichetta al numero, questo può capitare solo se due dispositivi
+  // sono stati configurati per errore con la STESSA etichetta: nessun dato
+  // viene comunque perso (ogni dispositivo salva sotto una propria chiave),
+  // ma è giusto segnalarlo bene in vista, così chi gestisce la cassa se ne
+  // accorge subito ed eventualmente annulla il doppione sbagliato.
   function ahDuplicateNumbers() {
     const source = (typeof salesLog !== 'undefined' && Array.isArray(salesLog)) ? salesLog : [];
     const counts = {};
-    source.forEach(sale => { const n = ahNumber(sale); counts[n] = (counts[n]||0) + 1; });
+    source.forEach(sale => { const label = ahLabel(sale); counts[label] = (counts[label]||0) + 1; });
     return counts;
   }
 
@@ -2466,23 +3278,32 @@ loadAll();
     list.innerHTML = sales.map((sale, i) => {
       const lines = ahLines(sale);
       const qty = lines.reduce((s,l) => s + (Number(l.qty)||0), 0);
-      const num = ahNumber(sale);
+      const label = ahLabel(sale);
       const voided = !!sale.voided;
-      const isDup = dupCounts[num] > 1;
+      const isDup = dupCounts[label] > 1;
       const badges = `${voided ? '<span class="ah-badge ah-badge-void">ANNULLATO</span>' : ''}${isDup ? `<span class="ah-badge ah-badge-dup" title="Numero scontrino presente più volte nel registro: probabile assegnazione doppia da due dispositivi offline">⚠ DOPPIO</span>` : ''}`;
 
       return `
         <div class="admin-history-row${voided ? ' ah-row-voided' : ''}">
-          <div class="admin-history-number">#${String(num).padStart(4,'0')} ${badges}</div>
+          <div class="admin-history-number">#${label} ${badges}</div>
           <div class="muted">${ahDateText(sale)}</div>
           <div>${qty}</div>
           <div class="admin-history-total">${ahMoney(ahTotal(sale))}</div>
           <div style="display:flex;justify-content:flex-end;gap:6px;">
+            <button type="button" class="secondary ah-edit" data-index="${i}" ${voided ? 'disabled' : ''}>Modifica</button>
             <button type="button" class="secondary ah-void" data-index="${i}">${voided ? 'Ripristina' : 'Annulla'}</button>
             <button type="button" class="secondary ah-detail" data-index="${i}">Dettagli</button>
           </div>
         </div>`;
     }).join('');
+
+    list.querySelectorAll('.ah-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(btn.disabled) return;
+        const sale = ahFiltered()[Number(btn.dataset.index)];
+        openSaleEditor(sale);
+      });
+    });
 
     list.querySelectorAll('.ah-detail').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2501,7 +3322,7 @@ loadAll();
 
   async function ahToggleVoid(sale) {
     if (!sale) return;
-    const num = String(ahNumber(sale)).padStart(4, '0');
+    const num = ahLabel(sale);
 
     if (sale.voided) {
       if (!confirm(`Ripristinare lo scontrino #${num}? Tornerà a contare nei totali.`)) return;
@@ -2526,11 +3347,11 @@ loadAll();
 
     if (!modal || !body) return;
 
-    const num = ahNumber(sale);
+    const num = ahLabel(sale);
     const lines = ahLines(sale);
     const voided = !!sale.voided;
 
-    title.textContent = `#${String(num).padStart(4,'0')}${voided ? ' — ANNULLATO' : ''}`;
+    title.textContent = `#${num}${voided ? ' — ANNULLATO' : ''}`;
 
     const voidNotice = voided ? `
       <div style="margin:8px 0 14px; padding:10px 12px; border:1px solid var(--red); border-radius:8px; background:rgba(220,53,69,.08); color:var(--red); font-size:13px;">
@@ -2559,6 +3380,8 @@ loadAll();
 
     const voidBtn = document.getElementById('adminHistoryVoidBtn');
     if (voidBtn) voidBtn.textContent = voided ? 'Ripristina ordine' : 'Annulla ordine';
+    const editBtn = document.getElementById('adminHistoryEditBtn');
+    if (editBtn) editBtn.disabled = voided;
 
     modal.style.display = 'flex';
   }
@@ -2610,12 +3433,21 @@ loadAll();
     document.getElementById('adminHistoryCloseDetail')?.addEventListener('click', ahCloseDetail);
     document.getElementById('adminHistoryCloseDetail2')?.addEventListener('click', ahCloseDetail);
 
+    document.getElementById('saleEditCloseBtn')?.addEventListener('click', closeSaleEditor);
+    document.getElementById('saleEditCancelBtn')?.addEventListener('click', closeSaleEditor);
+    document.getElementById('saleEditSaveBtn')?.addEventListener('click', saveEditedSale);
+    document.getElementById('saleEditModal')?.addEventListener('click', e => { if(e.target.id === 'saleEditModal') closeSaleEditor(); });
+
     document.getElementById('adminHistoryReprintBtn')?.addEventListener('click', () => {
       ahReprint(adminHistorySelected);
     });
 
     document.getElementById('adminHistoryVoidBtn')?.addEventListener('click', () => {
       ahToggleVoid(adminHistorySelected);
+    });
+
+    document.getElementById('adminHistoryEditBtn')?.addEventListener('click', () => {
+      openSaleEditor(adminHistorySelected);
     });
 
     document.getElementById('adminHistoryDetailModal')?.addEventListener('click', e => {
