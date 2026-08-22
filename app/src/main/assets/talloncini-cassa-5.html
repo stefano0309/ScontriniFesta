@@ -533,6 +533,41 @@
 
 <div id="printArea"></div>
 
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import { getDatabase, ref, onValue, set, update, runTransaction, push, remove, get } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDp8d5_dJRef3xwA9VYhDusemMjXZ8xYRs",
+    authDomain: "cassa-festa-2026.firebaseapp.com",
+    databaseURL: "https://cassa-festa-2026-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "cassa-festa-2026",
+    storageBucket: "cassa-festa-2026.firebasestorage.app",
+    messagingSenderId: "1014481421953",
+    appId: "1:1014481421953:web:3b209106ec7fede6782f80",
+    measurementId: "G-55S7V2QE37"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const auth = getAuth(app);
+
+  window.FirebaseCassa = { app, db, auth, ref, onValue, set, update, runTransaction, push, remove, get };
+  window.firebaseReady = false;
+
+  try {
+    await signInAnonymously(auth);
+    window.firebaseReady = true;
+    console.log("Firebase pronto. UID:", auth.currentUser?.uid);
+  } catch (error) {
+    window.firebaseReady = false;
+    console.error("Firebase: autenticazione anonima fallita", error);
+  }
+
+  window.dispatchEvent(new CustomEvent("firebase-ready", { detail: { ready: window.firebaseReady } }));
+</script>
+
 <script>
 let menu = [];
 let order = [];
@@ -620,6 +655,7 @@ function safeGet(key, fallback){
 }
 
 async function loadAll(){
+  // Prima carichiamo il fallback locale: l'app resta utilizzabile anche offline.
   menu = safeGet('menu-items', []);
   ticketCounter = safeGet('ticket-counter', 1);
   settings = Object.assign(settings, safeGet('app-settings', {}));
@@ -633,15 +669,166 @@ async function loadAll(){
   renderDishSelectHelpers();
   fillSettingsForm();
 
-  if(order.length > 0){
-    flash('Ordine in corso ripristinato');
+  if(order.length > 0) flash('Ordine in corso ripristinato');
+
+  // Se Firebase è già pronto, collega subito i dati condivisi.
+  if(window.firebaseReady) setupFirebaseSync();
+}
+
+async function saveMenu(){
+  const localOk = safeSet('menu-items', menu);
+  if(!window.firebaseReady) return localOk;
+  try{
+    const data = {};
+    menu.forEach(item => { data[item.id] = item; });
+    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/menu'), data);
+    return true;
+  }catch(e){
+    console.error('Firebase saveMenu:', e);
+    showDataWarning('Menu salvato localmente, ma non sincronizzato con Firebase. Controlla la connessione.');
+    return localOk;
   }
 }
-function saveMenu(){ return safeSet('menu-items', menu); }
-function saveCounter(){ return safeSet('ticket-counter', ticketCounter); }
-function saveSettings(){ return safeSet('app-settings', settings); }
+
+async function saveCounter(){
+  const localOk = safeSet('ticket-counter', ticketCounter);
+  if(!window.firebaseReady) return localOk;
+  try{
+    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/counter'), ticketCounter);
+    return true;
+  }catch(e){
+    console.error('Firebase saveCounter:', e);
+    return localOk;
+  }
+}
+
+async function saveSettings(){
+  const localOk = safeSet('app-settings', settings);
+  if(!window.firebaseReady) return localOk;
+  try{
+    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/settings'), settings);
+    return true;
+  }catch(e){
+    console.error('Firebase saveSettings:', e);
+    showDataWarning('Impostazioni salvate localmente, ma non sincronizzate con Firebase.');
+    return localOk;
+  }
+}
+
+// Le credenziali admin restano locali al dispositivo e NON vengono pubblicate su Firebase.
 function saveCreds(){ return safeSet('admin-creds', creds); }
-function saveSalesLog(){ return safeSet('sales-log', salesLog); }
+
+async function saveSalesLog(){
+  const localOk = safeSet('sales-log', salesLog);
+  if(!window.firebaseReady) return localOk;
+  try{
+    const data = {};
+    salesLog.forEach(entry => { data['order_' + String(entry.orderNum).padStart(4,'0')] = entry; });
+    await FirebaseCassa.set(FirebaseCassa.ref(FirebaseCassa.db, 'cassa/sales'), data);
+    return true;
+  }catch(e){
+    console.error('Firebase saveSalesLog:', e);
+    showDataWarning('Vendite salvate localmente, ma non sincronizzate con Firebase.');
+    return localOk;
+  }
+}
+
+let firebaseSyncStarted = false;
+async function bootstrapFirebaseFromLocal(){
+  if(!window.firebaseReady || !window.FirebaseCassa) return;
+  try{
+    const {db, ref, get, set} = FirebaseCassa;
+    const [menuSnap, settingsSnap, counterSnap, salesSnap] = await Promise.all([
+      get(ref(db, 'cassa/menu')),
+      get(ref(db, 'cassa/settings')),
+      get(ref(db, 'cassa/counter')),
+      get(ref(db, 'cassa/sales'))
+    ]);
+    const writes = [];
+    if(!menuSnap.exists() && menu.length) writes.push(set(ref(db, 'cassa/menu'), Object.fromEntries(menu.map(x => [x.id, x]))));
+    if(!settingsSnap.exists()) writes.push(set(ref(db, 'cassa/settings'), settings));
+    if(!counterSnap.exists()) writes.push(set(ref(db, 'cassa/counter'), ticketCounter));
+    if(!salesSnap.exists() && salesLog.length) writes.push(set(ref(db, 'cassa/sales'), Object.fromEntries(salesLog.map(x => ['order_' + String(x.orderNum).padStart(4,'0'), x]))));
+    if(writes.length) await Promise.all(writes);
+  }catch(e){
+    console.error('Firebase bootstrap:', e);
+  }
+}
+
+function setupFirebaseSync(){
+  if(firebaseSyncStarted || !window.firebaseReady || !window.FirebaseCassa) return;
+  firebaseSyncStarted = true;
+  const {db, ref, onValue} = FirebaseCassa;
+
+  onValue(ref(db, 'cassa/menu'), snap => {
+    const data = snap.val();
+    if(data){
+      menu = Array.isArray(data) ? data : Object.values(data);
+      safeSet('menu-items', menu);
+      normalizeSettings(); renderMenuAdmin(); renderCashier(); renderDishSelectHelpers();
+    }
+  });
+
+  onValue(ref(db, 'cassa/settings'), snap => {
+    const data = snap.val();
+    if(data){
+      settings = Object.assign(settings, data);
+      safeSet('app-settings', settings);
+      normalizeSettings(); fillSettingsForm(); renderCashier(); renderMenuAdmin();
+    }
+  });
+
+  onValue(ref(db, 'cassa/counter'), snap => {
+    const value = snap.val();
+    if(typeof value === 'number' && Number.isFinite(value)){
+      ticketCounter = value;
+      safeSet('ticket-counter', ticketCounter);
+      document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
+      document.getElementById('counterPreview').textContent = '#' + String(ticketCounter).padStart(4,'0');
+    }
+  });
+
+  onValue(ref(db, 'cassa/sales'), snap => {
+    const data = snap.val();
+    salesLog = data ? Object.values(data).sort((a,b) => Number(a.orderNum)-Number(b.orderNum)) : [];
+    safeSet('sales-log', salesLog);
+    if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
+  });
+
+  console.log('Sincronizzazione Firebase attiva');
+}
+
+window.addEventListener('firebase-ready', () => {
+  if(window.firebaseReady){
+    bootstrapFirebaseFromLocal().then(() => setupFirebaseSync());
+    flash('Firebase sincronizzato');
+  }else{
+    showDataWarning('Firebase non disponibile: la cassa continua in modalità locale.');
+  }
+});
+
+async function reserveTicketNumber(){
+  if(!window.firebaseReady){
+    const n = ticketCounter;
+    ticketCounter += 1;
+    safeSet('ticket-counter', ticketCounter);
+    return n;
+  }
+
+  const counterRef = FirebaseCassa.ref(FirebaseCassa.db, 'cassa/counter');
+  const result = await FirebaseCassa.runTransaction(counterRef, current => {
+    const value = (typeof current === 'number' && current >= 1) ? current : 1;
+    return value + 1;
+  });
+
+  if(!result.committed) throw new Error('Numero ordine non riservato');
+  const nextValue = result.snapshot.val();
+  const orderNum = nextValue - 1;
+  ticketCounter = nextValue;
+  safeSet('ticket-counter', ticketCounter);
+  return orderNum;
+}
+
 // L'ordine corrente viene salvato ad ogni modifica: se l'app viene chiusa o il
 // processo Android termina all'improvviso, alla riapertura l'ordine non si perde.
 function saveOrderDraft(){ try{ localStorage.setItem(LS_PREFIX + 'current-order-draft', JSON.stringify(order)); }catch(e){} }
@@ -775,18 +962,20 @@ document.getElementById('clearOrderCashierBtn').addEventListener('click', () => 
   clearOrderDraft();
 });
 
-function recordSale(orderNum, orderLines, now){
+async function recordSale(orderNum, orderLines, now){
   const total = orderLines.reduce((s,l) => s + l.price*l.qty, 0);
-  salesLog.push({
+  const sale = {
     orderNum,
     ts: now.toISOString(),
-    lines: orderLines.map(l => ({ name: l.name, qty: l.qty, price: l.price })),
+    lines: orderLines.map(l => ({ name:l.name, qty:l.qty, price:l.price })),
     total
-  });
-  const saved = saveSalesLog();
-  if(!saved){
-    showDataWarning(`L'ordine #${String(orderNum).padStart(4,'0')} è stato stampato ma NON è stato registrato nel riepilogo cassa per mancanza di spazio. Esporta un backup e libera memoria.`);
-  }
+  };
+
+  salesLog = salesLog.filter(x => Number(x.orderNum) !== Number(orderNum));
+  salesLog.push(sale);
+  salesLog.sort((a,b) => Number(a.orderNum)-Number(b.orderNum));
+  const saved = await saveSalesLog();
+  if(!saved) showDataWarning(`L'ordine #${String(orderNum).padStart(4,'0')} è stato stampato ma il registro cassa è stato salvato solo localmente.`);
 }
 
 function aggregateSalesLog(){
@@ -1112,7 +1301,7 @@ document.getElementById('printOrderBtn').addEventListener('click', async () => {
 
   try{
     const now = new Date();
-    const orderNum = ticketCounter;
+    const orderNum = await reserveTicketNumber();
     const kitchenTickets = getKitchenTicketsList();
 
     if(settings.printMethod === 'rawbt'){
@@ -1140,16 +1329,11 @@ document.getElementById('printOrderBtn').addEventListener('click', async () => {
       flash('Ordine inviato e talloncini generati');
     }
 
-    ticketCounter += 1;
-    const counterSaved = await saveCounter();
-    recordSale(orderNum, order, now);
+    await recordSale(orderNum, order, now);
     order = [];
     clearOrderDraft();
     renderOrderCashier();
     document.getElementById('nextTicketLabel').textContent = '#' + String(ticketCounter).padStart(4,'0');
-    if(!counterSaved){
-      showDataWarning('Il contatore ordini non è stato salvato correttamente. Controlla la memoria del dispositivo.');
-    }
   }finally{
     btn.dataset.printing = '0';
     // Riallinea sempre lo stato del pulsante al contenuto reale dell'ordine:
