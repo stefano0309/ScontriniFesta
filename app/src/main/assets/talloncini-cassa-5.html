@@ -271,6 +271,273 @@
     #printArea{ position: static; width:auto; height:auto; overflow:visible; }
   }
 </style>
+
+
+
+<style id="admin-history-theme">
+/* ================= STORICO — coerente con le variabili di tema dell'app ================= */
+#page-history .admin-history-topbar {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin:0 0 18px;
+}
+
+#page-history .admin-history-topbar h2 {
+  margin:0;
+  font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.04em;
+  font-size:14px; color: var(--amber);
+  display:flex; align-items:center; gap:8px;
+}
+#page-history .admin-history-topbar h2::before{
+  content:""; width:8px; height:8px; background:var(--amber); border-radius:2px; display:inline-block;
+}
+
+#page-history .admin-history-stats {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin-bottom:14px;
+}
+
+#page-history .admin-history-stat,
+#page-history .admin-history-filters,
+#page-history .admin-history-table-card {
+  background: var(--panel);
+  color: var(--text);
+  border:1px solid var(--line);
+  border-radius:10px;
+}
+
+#page-history .admin-history-stat {
+  padding:16px 18px;
+}
+
+#page-history .admin-history-stat span,
+#page-history .muted {
+  color: var(--text-dim);
+  font-size:12px;
+}
+
+#page-history .admin-history-stat strong {
+  display:block; margin-top:4px;
+  color: var(--amber);
+  font-family:'JetBrains Mono',monospace;
+  font-size:1.25rem;
+}
+
+#page-history .admin-history-filters {
+  display:flex;
+  align-items:end;
+  gap:10px;
+  padding:12px;
+  margin-bottom:14px;
+  flex-wrap:wrap;
+}
+
+#page-history .admin-history-filters label {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  font-size:12px;
+  color: var(--text-dim);
+}
+
+#page-history .admin-history-filters input,
+#page-history .admin-history-search {
+  background: var(--panel-2);
+  color: var(--text);
+  border:1px solid var(--line);
+}
+
+#page-history .admin-history-filters input {
+  min-height:38px;
+  box-sizing:border-box;
+  border-radius:6px;
+  padding:8px 10px;
+  font-size:14px;
+  margin:0;
+}
+
+#page-history .admin-history-search {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:1 1 240px;
+  min-height:38px;
+  box-sizing:border-box;
+  border-radius:6px;
+  padding:0 10px;
+  color: var(--text-dim);
+}
+
+#page-history .admin-history-search input {
+  width:100%;
+  border:0!important;
+  outline:0;
+  background:transparent!important;
+  color: var(--text);
+  min-height:34px;
+  font-size:14px;
+  margin:0;
+}
+
+#page-history .admin-history-table-card {
+  overflow:hidden;
+}
+
+#page-history .admin-history-table-head {
+  display:grid;
+  grid-template-columns:minmax(90px,.7fr) minmax(130px,1.2fr) minmax(70px,.6fr) minmax(90px,.8fr) 100px;
+  align-items:center;
+  gap:12px;
+  padding:11px 16px;
+  font-family:'Oswald',sans-serif;
+  font-size:11px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-bottom:1px solid var(--line);
+}
+
+#page-history .admin-history-row {
+  display:grid;
+  grid-template-columns:minmax(90px,.7fr) minmax(130px,1.2fr) minmax(70px,.6fr) minmax(90px,.8fr) 100px;
+  align-items:center;
+  gap:12px;
+  padding:13px 16px;
+  color: var(--text);
+  border-bottom:1px solid var(--line);
+}
+
+#page-history .admin-history-row:hover {
+  background: var(--panel-2);
+}
+
+#page-history .admin-history-number,
+#page-history .admin-history-total {
+  color: var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-weight:700;
+}
+#page-history .admin-history-total{ color: var(--amber); }
+
+#page-history .admin-history-empty {
+  padding:38px 20px;
+  text-align:center;
+  color: var(--text-dim);
+  font-size:13px;
+  font-style:italic;
+}
+
+/* Bottoni riutilizzati nel modulo Storico, stessa grammatica visiva del resto dell'app */
+#page-history .secondary,
+.admin-history-modal .secondary{
+  background:transparent; border:1px solid var(--line); color:var(--text-dim);
+  padding:9px 14px; border-radius:8px; font-weight:600; font-size:12.5px;
+}
+#page-history .secondary:hover, .admin-history-modal .secondary:hover{ border-color: var(--amber); color: var(--amber); }
+#adminHistoryReprintBtn{
+  background: var(--amber); color:#23260C; font-weight:700;
+  padding:10px 16px; border-radius:8px; font-size:13px;
+}
+.admin-history-modal .icon-btn{
+  background: transparent; border:1px solid var(--line); color: var(--text-dim);
+  width:32px; height:32px; border-radius:8px; font-size:14px; flex-shrink:0;
+}
+.admin-history-modal .icon-btn:hover{ border-color: var(--amber); color: var(--amber); }
+
+.admin-history-modal {
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,.6);
+}
+
+.admin-history-modal-card {
+  width:min(620px,100%);
+  max-height:90vh;
+  overflow:auto;
+  box-sizing:border-box;
+  background: var(--panel);
+  color: var(--text);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 20px 60px rgba(0,0,0,.4);
+  padding:20px;
+}
+
+.admin-history-modal-head {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  padding-bottom:14px;
+  border-bottom:1px solid var(--line);
+}
+
+.admin-history-modal-head h2 {
+  font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.02em;
+  color: var(--amber);
+  margin:3px 0 0;
+  font-size:18px;
+}
+
+.admin-history-detail-line {
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:12px;
+  padding:11px 0;
+  color: var(--text);
+  font-size:13.5px;
+  border-bottom:1px solid var(--line);
+}
+.admin-history-detail-line strong{ font-family:'JetBrains Mono',monospace; }
+
+.admin-history-detail-total {
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding-top:16px;
+  color: var(--text);
+  font-family:'JetBrains Mono',monospace;
+  font-size:1.1rem;
+  font-weight:800;
+}
+
+.admin-history-modal-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:9px;
+  flex-wrap:wrap;
+  margin-top:18px;
+}
+
+@media (max-width:760px) {
+  #page-history .admin-history-stats {
+    grid-template-columns:1fr;
+  }
+  #page-history .admin-history-table-head {
+    display:none;
+  }
+  #page-history .admin-history-row {
+    grid-template-columns:1fr auto;
+    gap:5px 12px;
+  }
+  #page-history .admin-history-row > :nth-child(1) { grid-column:1; grid-row:1; }
+  #page-history .admin-history-row > :nth-child(2) { grid-column:1; grid-row:2; }
+  #page-history .admin-history-row > :nth-child(3) { grid-column:2; grid-row:1; text-align:right; }
+  #page-history .admin-history-row > :nth-child(4) { grid-column:2; grid-row:2; text-align:right; }
+  #page-history .admin-history-row > :nth-child(5) { grid-column:1 / -1; grid-row:3; }
+}
+</style>
+
 </head>
 <body>
 
@@ -336,6 +603,7 @@
       <button class="tab-btn active" data-tab="menuTab">Menu</button>
       <button class="tab-btn" data-tab="csvTab">Importa CSV</button>
       <button class="tab-btn" data-tab="closeTab">Chiusura Cassa</button>
+      <button class="tab-btn" data-tab="page-history">🧾 Storico</button>
       <button class="tab-btn" data-tab="settingsTab">Impostazioni</button>
     </div>
 
@@ -526,6 +794,55 @@
 
       <button class="btn-amber btn-block" id="saveSettingsBtn" style="padding:14px; font-size:15px;">Salva impostazioni</button>
       <div class="status-line" id="settingsStatus" style="text-align:center;"></div>
+    </div>
+
+    <!-- STORICO TAB -->
+    <div class="tab-pane" id="page-history">
+      <div class="admin-history-topbar">
+        <h2>Storico scontrini</h2>
+      </div>
+
+      <div class="admin-history-stats">
+        <div class="admin-history-stat">
+          <span>Scontrini</span>
+          <strong id="adminHistoryCount">0</strong>
+        </div>
+        <div class="admin-history-stat">
+          <span>Incasso</span>
+          <strong id="adminHistoryTotal">€0,00</strong>
+        </div>
+        <div class="admin-history-stat">
+          <span>Media scontrino</span>
+          <strong id="adminHistoryAverage">€0,00</strong>
+        </div>
+      </div>
+
+      <div class="admin-history-filters">
+        <div class="admin-history-search">
+          <span>⌕</span>
+          <input id="adminHistorySearch" type="search" placeholder="Cerca numero scontrino...">
+        </div>
+        <label>
+          <span>Da</span>
+          <input id="adminHistoryDateFrom" type="date">
+        </label>
+        <label>
+          <span>A</span>
+          <input id="adminHistoryDateTo" type="date">
+        </label>
+        <button type="button" id="adminHistoryClearFilters" class="secondary">Reset</button>
+      </div>
+
+      <div class="admin-history-table-card">
+        <div class="admin-history-table-head">
+          <span>Scontrino</span>
+          <span>Data e ora</span>
+          <span>Articoli</span>
+          <span>Totale</span>
+          <span></span>
+        </div>
+        <div id="adminHistoryList"></div>
+      </div>
     </div>
 
   </div>
@@ -793,6 +1110,7 @@ function setupFirebaseSync(){
     salesLog = data ? Object.values(data).sort((a,b) => Number(a.orderNum)-Number(b.orderNum)) : [];
     safeSet('sales-log', salesLog);
     if(document.getElementById('closeTab').classList.contains('active')) renderChiusuraCassa();
+    window.renderAdminHistory?.();
   });
 
   console.log('Sincronizzazione Firebase attiva');
@@ -967,7 +1285,7 @@ async function recordSale(orderNum, orderLines, now){
   const sale = {
     orderNum,
     ts: now.toISOString(),
-    lines: orderLines.map(l => ({ name:l.name, qty:l.qty, price:l.price })),
+    lines: orderLines.map(l => ({ name:l.name, qty:l.qty, price:l.price, note:l.note || '' })),
     total
   };
 
@@ -976,6 +1294,7 @@ async function recordSale(orderNum, orderLines, now){
   salesLog.sort((a,b) => Number(a.orderNum)-Number(b.orderNum));
   const saved = await saveSalesLog();
   if(!saved) showDataWarning(`L'ordine #${String(orderNum).padStart(4,'0')} è stato stampato ma il registro cassa è stato salvato solo localmente.`);
+  window.renderAdminHistory?.();
 }
 
 function aggregateSalesLog(){
@@ -1287,6 +1606,34 @@ function ensurePrintPageStyle(){
     .print-page{ width: ${settings.paperWidth}mm; }
     @page{ size: ${settings.paperWidth}mm auto; margin: 3mm; }
   `;
+}
+
+// Ristampa dello scontrino riepilogativo di una vendita già registrata
+// (usata dallo Storico). Riusa la stessa pipeline di stampa della cassa,
+// così rispetta il metodo scelto (dialogo o RawBT), la valuta e la
+// larghezza carta impostati, invece di duplicare quella logica altrove.
+async function printReceipt(sale){
+  if(!sale) return false;
+  const orderNum = sale.orderNum;
+  const lines = Array.isArray(sale.lines) ? sale.lines : [];
+  const now = sale.ts ? new Date(sale.ts) : new Date();
+
+  if(settings.printMethod === 'rawbt'){
+    const payload = ESC + '@' + buildSummaryEscPos(lines, orderNum, now);
+    const result = await sendViaRawBtAndWait(payload);
+    if(!result.ok){
+      flash('Ristampa non riuscita: RawBT non è disponibile.', true);
+      return false;
+    }
+    flash('Scontrino #' + String(orderNum).padStart(4,'0') + ' ristampato via RawBT');
+    return true;
+  }
+
+  ensurePrintPageStyle();
+  document.getElementById('printArea').innerHTML = renderSummaryPage(lines, orderNum, now);
+  window.print();
+  flash('Scontrino #' + String(orderNum).padStart(4,'0') + ' ristampato');
+  return true;
 }
 
 document.getElementById('printOrderBtn').addEventListener('click', async () => {
@@ -1828,6 +2175,247 @@ document.getElementById('importSettingsBtn').addEventListener('click', () => {
 });
 
 loadAll();
+
 </script>
+
+<div id="adminHistoryDetailModal" class="admin-history-modal" style="display:none;">
+  <div class="admin-history-modal-card">
+    <div class="admin-history-modal-head">
+      <div>
+        <div class="muted">Dettaglio scontrino</div>
+        <h2 id="adminHistoryDetailTitle">#0000</h2>
+      </div>
+      <button type="button" id="adminHistoryCloseDetail" class="icon-btn">✕</button>
+    </div>
+    <div id="adminHistoryDetailBody"></div>
+    <div class="admin-history-modal-actions">
+      <button type="button" id="adminHistoryReprintBtn">🖨️ Ristampa scontrino</button>
+      <button type="button" id="adminHistoryCloseDetail2" class="secondary">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ================= ADMIN STORICO SCONTRINI =================
+ * Nota: questo modulo NON tiene una propria copia dei dati.
+ * Legge sempre da `salesLog`, la stessa variabile globale che l'app
+ * mantiene aggiornata sia da localStorage (funziona anche offline)
+ * sia dalla sincronizzazione Firebase quando disponibile. In questo
+ * modo lo Storico resta corretto anche in una festa senza connessione.
+ */
+(function () {
+  let adminHistorySelected = null;
+
+  function ahMoney(value) {
+    const currency = (typeof settings !== 'undefined' && settings?.currency) ? settings.currency : '€';
+    return currency + ' ' + (Number(value) || 0).toFixed(2);
+  }
+
+  function ahEscape(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+    }[c]));
+  }
+
+  function ahNumber(sale) {
+    const n = Number(sale && sale.orderNum);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function ahDate(sale) {
+    const raw = sale && (sale.ts || sale.timestamp || sale.date);
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function ahDateText(sale) {
+    const d = ahDate(sale);
+    if (!d) return '—';
+    return d.toLocaleDateString('it-IT') + ' · ' + d.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function ahDateKey(sale) {
+    const d = ahDate(sale);
+    if (!d) return '';
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function ahLines(sale) {
+    if (!sale) return [];
+    if (Array.isArray(sale.lines)) return sale.lines;
+    if (sale.lines && typeof sale.lines === 'object') return Object.values(sale.lines);
+    if (Array.isArray(sale.order)) return sale.order;
+    if (sale.order && typeof sale.order === 'object') return Object.values(sale.order);
+    return [];
+  }
+
+  function ahTotal(sale) {
+    if (typeof sale?.total === 'number') return sale.total;
+    return ahLines(sale).reduce((sum, line) => {
+      return sum + (Number(line.qty)||0) * (Number(line.price)||0);
+    }, 0);
+  }
+
+  function ahFiltered() {
+    const search = (document.getElementById('adminHistorySearch')?.value || '')
+      .trim().toLowerCase().replace(/^#/, '');
+    const from = document.getElementById('adminHistoryDateFrom')?.value || '';
+    const to = document.getElementById('adminHistoryDateTo')?.value || '';
+
+    const source = (typeof salesLog !== 'undefined' && Array.isArray(salesLog)) ? salesLog : [];
+    return source
+      .filter(Boolean)
+      .filter(sale => {
+        if (search && !String(ahNumber(sale)).includes(search)) return false;
+        const key = ahDateKey(sale);
+        if (from && (!key || key < from)) return false;
+        if (to && (!key || key > to)) return false;
+        return true;
+      })
+      .sort((a,b) => ahNumber(b)-ahNumber(a));
+  }
+
+  function renderAdminHistory() {
+    const list = document.getElementById('adminHistoryList');
+    if (!list) return;
+
+    const sales = ahFiltered();
+    const total = sales.reduce((s, sale) => s + ahTotal(sale), 0);
+
+    document.getElementById('adminHistoryCount').textContent = sales.length;
+    document.getElementById('adminHistoryTotal').textContent = ahMoney(total);
+    document.getElementById('adminHistoryAverage').textContent =
+      ahMoney(sales.length ? total / sales.length : 0);
+
+    if (!sales.length) {
+      list.innerHTML = `<div class="admin-history-empty">Nessuno scontrino trovato.</div>`;
+      return;
+    }
+
+    list.innerHTML = sales.map((sale, i) => {
+      const lines = ahLines(sale);
+      const qty = lines.reduce((s,l) => s + (Number(l.qty)||0), 0);
+      const num = ahNumber(sale);
+
+      return `
+        <div class="admin-history-row">
+          <div class="admin-history-number">#${String(num).padStart(4,'0')}</div>
+          <div class="muted">${ahDateText(sale)}</div>
+          <div>${qty}</div>
+          <div class="admin-history-total">${ahMoney(ahTotal(sale))}</div>
+          <div style="display:flex;justify-content:flex-end;gap:6px;">
+            <button type="button" class="secondary ah-detail" data-index="${i}">Dettagli</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.ah-detail').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sale = ahFiltered()[Number(btn.dataset.index)];
+        ahOpenDetail(sale);
+      });
+    });
+  }
+
+  function ahOpenDetail(sale) {
+    adminHistorySelected = sale;
+    const modal = document.getElementById('adminHistoryDetailModal');
+    const title = document.getElementById('adminHistoryDetailTitle');
+    const body = document.getElementById('adminHistoryDetailBody');
+
+    if (!modal || !body) return;
+
+    const num = ahNumber(sale);
+    const lines = ahLines(sale);
+
+    title.textContent = `#${String(num).padStart(4,'0')}`;
+
+    body.innerHTML = `
+      <div class="muted" style="margin:10px 0 4px;">${ahDateText(sale)}</div>
+      ${lines.map(line => {
+        const q = Number(line.qty)||0;
+        const p = Number(line.price)||0;
+        const note = line.note ? `<div style="grid-column:1/-1; font-size:11.5px; color:var(--text-dim); font-style:italic; margin-top:-6px;">— ${ahEscape(line.note)}</div>` : '';
+        return `
+          <div class="admin-history-detail-line">
+            <span>${q} × ${ahEscape(line.name || 'Prodotto')}</span>
+            <span>${ahMoney(p)}</span>
+            <strong>${ahMoney(q*p)}</strong>
+          </div>${note}`;
+      }).join('')}
+      <div class="admin-history-detail-total">
+        <span>TOTALE</span>
+        <span>${ahMoney(ahTotal(sale))}</span>
+      </div>`;
+
+    modal.style.display = 'flex';
+  }
+
+  function ahCloseDetail() {
+    const modal = document.getElementById('adminHistoryDetailModal');
+    if (modal) modal.style.display = 'none';
+    adminHistorySelected = null;
+  }
+
+  async function ahReprint(sale) {
+    if (!sale) return;
+
+    // Usa sempre la stessa pipeline di stampa della cassa (rispetta il
+    // metodo scelto — dialogo di sistema o RawBT — la larghezza carta e la
+    // valuta configurati in Impostazioni), invece di un percorso separato.
+    if (typeof printReceipt === 'function') {
+      try {
+        await printReceipt(sale);
+      } catch (e) {
+        console.error('Ristampa non riuscita:', e);
+        flash('Ristampa non riuscita: ' + (e?.message || 'errore sconosciuto'), true);
+      }
+      return;
+    }
+
+    console.error('printReceipt non disponibile: impossibile ristampare.');
+    flash('Funzione di stampa non disponibile.', true);
+  }
+
+  // Rende visibile la lista aggiornata di dati ogni volta che l'utente apre
+  // il tab Storico dalla barra di navigazione (oltre agli aggiornamenti
+  // automatici che già arrivano quando salesLog cambia).
+  document.querySelector('.tab-btn[data-tab="page-history"]')?.addEventListener('click', renderAdminHistory);
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('adminHistorySearch')?.addEventListener('input', renderAdminHistory);
+    document.getElementById('adminHistoryDateFrom')?.addEventListener('change', renderAdminHistory);
+    document.getElementById('adminHistoryDateTo')?.addEventListener('change', renderAdminHistory);
+
+    document.getElementById('adminHistoryClearFilters')?.addEventListener('click', () => {
+      document.getElementById('adminHistorySearch').value = '';
+      document.getElementById('adminHistoryDateFrom').value = '';
+      document.getElementById('adminHistoryDateTo').value = '';
+      renderAdminHistory();
+    });
+
+    document.getElementById('adminHistoryCloseDetail')?.addEventListener('click', ahCloseDetail);
+    document.getElementById('adminHistoryCloseDetail2')?.addEventListener('click', ahCloseDetail);
+
+    document.getElementById('adminHistoryReprintBtn')?.addEventListener('click', () => {
+      ahReprint(adminHistorySelected);
+    });
+
+    document.getElementById('adminHistoryDetailModal')?.addEventListener('click', e => {
+      if (e.target.id === 'adminHistoryDetailModal') ahCloseDetail();
+    });
+
+    renderAdminHistory();
+  });
+
+  // Esposta per essere richiamata dal resto dell'app (sync Firebase, nuova
+  // vendita registrata) così la lista resta aggiornata in tempo reale anche
+  // se il tab è già aperto.
+  window.renderAdminHistory = renderAdminHistory;
+})();
+</script>
+
 </body>
 </html>
