@@ -84,16 +84,29 @@ public class AndroidPrinterInterface {
                             if ("port".equals(key)) printer.networkPort = Integer.parseInt(value);
                             if ("timeout".equals(key)) printer.networkTimeoutMs = Integer.parseInt(value);
                         } else if ("usb".equals(type)) {
-                            if ("vid".equals(key)) printer.usbVendorId = Integer.parseInt(value);
-                            if ("pid".equals(key)) printer.usbProductId = Integer.parseInt(value);
+                            if ("vid".equals(key)) printer.usbVendorId = (int) Long.parseLong(value, 16);
+                            if ("pid".equals(key)) printer.usbProductId = (int) Long.parseLong(value, 16);
                         }
                     }
                 }
             }
             
+            if (!printer.isValid()) {
+                String errMsg = "Configurazione stampante incompleta";
+                logger.w("AndroidPrinter", errMsg);
+                if (callback != null) callback.onError(errMsg);
+                return "";
+            }
+            
             printerManager.savePrinter(printer);
             logger.i("AndroidPrinter", "Stampante aggiunta: " + name);
+            if (callback != null) callback.onMessage("Stampante '" + name + "' aggiunta con successo");
             return printer.id;
+        } catch (NumberFormatException e) {
+            String errMsg = "Formato dei numeri non valido (VID/PID devono essere esadecimali): " + e.getMessage();
+            logger.e("AndroidPrinter", errMsg, e);
+            if (callback != null) callback.onError(errMsg);
+            return "";
         } catch (Exception e) {
             logger.e("AndroidPrinter", "addPrinter error", e);
             if (callback != null) callback.onError("Errore nell'aggiungere la stampante: " + e.getMessage());

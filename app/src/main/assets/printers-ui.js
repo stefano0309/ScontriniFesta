@@ -30,15 +30,23 @@
 
   function loadPrintersFromAndroid() {
     if (typeof AndroidPrinter === 'undefined') {
-      console.warn('AndroidPrinter non disponibile');
+      console.error('AndroidPrinter non disponibile - il bridge JavaScript-Android non è stato registrato correttamente');
+      printers = [];
       return;
     }
 
     try {
       const json = AndroidPrinter.getPrinters();
-      printers = JSON.parse(json || '[]');
+      if (!json) {
+        console.warn('getPrinters ha ritornato null');
+        printers = [];
+        return;
+      }
+      printers = JSON.parse(json);
+      console.log('Caricate ' + printers.length + ' stampanti');
     } catch (e) {
       console.error('Errore nel caricamento stampanti:', e);
+      console.error('Risposta ricevuta:', AndroidPrinter.getPrinters());
       printers = [];
     }
   }
@@ -209,17 +217,23 @@
     }
 
     if (typeof AndroidPrinter === 'undefined') {
-      alert('AndroidPrinter non disponibile');
+      alert('AndroidPrinter bridge non disponibile. Verifica che l\'app sia correttamente compilata.');
+      console.error('AndroidPrinter is undefined - bridge not registered');
       return;
     }
 
     try {
-      AndroidPrinter.addPrinter(name, type, config);
-      flash('Stampante aggiunta');
-      closeAddPrinterModal();
-      reloadPrinters();
+      const printerId = AndroidPrinter.addPrinter(name, type, config);
+      if (printerId && printerId !== '') {
+        flash('✓ Stampante aggiunta con successo');
+        closeAddPrinterModal();
+        setTimeout(() => reloadPrinters(), 500);
+      } else {
+        alert('Errore: impossibile aggiungere la stampante. Verifica i dettagli.');
+      }
     } catch (e) {
-      alert('Errore: ' + e.message);
+      console.error('confirmAddPrinter exception:', e);
+      alert('Errore JavaScript: ' + e.message);
     }
   };
 

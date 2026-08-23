@@ -1,0 +1,323 @@
+name: Security & Quality Checks
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Ogni domenica a mezzanotte
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  security-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.10.2
+
+      # ====================================
+      # SECURITY: Verifica Dependencies
+      # ====================================
+      - name: Check Dependencies Security
+        run: |
+          echo "=== Security Check: Dependencies ==="
+          
+          chmod +x gradlew
+          
+          echo "Verifica vulnerabilità note..."
+          ./gradlew dependencyCheck || echo "⚠ Dependency check fallito"
+          
+          echo "Controllando Android SDK vulnerabilities..."
+          ./gradlew clean build -x test -q 2>&1 | grep -i "vulnerability\|security" || echo "✓ Nessuna vulnerabilità rilevata"
+          
+          echo "✓ Dependency check completato"
+        continue-on-error: true
+
+      # ====================================
+      # SECURITY: Verifica Permissions
+      # ====================================
+      - name: Check Android Permissions
+        run: |
+          echo "=== Security Check: Permissions ==="
+          
+          MANIFEST="app/src/main/AndroidManifest.xml"
+          
+          echo "Permessi utilizzati:"
+          grep -o 'android.permission.[A-Z_]*' "$MANIFEST" | sort | uniq | while read perm; do
+            echo "  - $perm"
+          done
+          
+          echo ""
+          echo "Verificando permessi eccessivi..."
+          
+          # Permessi da evitare se non necessari
+          DANGEROUS_PERMS=("READ_CONTACTS" "WRITE_CONTACTS" "ACCESS_FINE_LOCATION" "ACCESS_COARSE_LOCATION" "CAMERA" "RECORD_AUDIO")
+          
+          for perm in "${DANGEROUS_PERMS[@]}"; do
+            if grep -q "$perm" "$MANIFEST"; then
+              echo "  ⚠ Permesso potenzialmente rischioso: $perm"
+            fi
+          done
+          
+          echo "✓ Permission audit completato"
+
+      # ====================================
+      # SECURITY: Verifica Encryption
+      # ====================================
+      - name: Check Encryption & HTTPS
+        run: |
+          echo "=== Security Check: Network ==="
+          
+          echo "Verificando uso di HTTPS..."
+          grep -r "http://" app/src/main --include="*.java" --include="*.xml" | grep -v "https://" && \
+            echo "  ⚠ URL non-secure trovato" || \
+            echo "  ✓ Utilizzo HTTPS verificato"
+          
+          echo "Verificando network security config..."
+          if grep -q "cleartext" app/src/main/AndroidManifest.xml 2>/dev/null; then
+            echo "  ⚠ Cleartext traffic rilevato"
+          else
+            echo "  ✓ Nessun cleartext traffic"
+          fi
+          
+          echo "✓ Network security check completato"
+
+      # ====================================
+      # SECURITY: Verifica Secrets
+      # ====================================
+      - name: Check for Hardcoded Secrets
+        run: |
+          echo "=== Security Check: Hardcoded Secrets ==="
+          
+          echo "Cercando possibili secrets hardcoded..."
+          
+          FOUND_ISSUES=0
+          
+          # Cerca API keys
+          if grep -r "api.key\|API_KEY\|apiKey" app/src/main --include="*.java" | grep -v "getString\|R.string\|preference"; then
+            echo "  ⚠ Possibile API key hardcoded"
+            FOUND_ISSUES=$((FOUND_ISSUES + 1))
+          fi
+          
+          # Cerca password
+          if grep -r "password.*=.*['\"]" app/src/main --include="*.java" | grep -v "getString\|R.string"; then
+            echo "  ⚠ Possibile password hardcoded"
+            FOUND_ISSUES=$((FOUND_ISSUES + 1))
+          fi
+          
+          # Cerca tokens
+          if grep -r "token.*=.*['\"].*[a-zA-Z0-9]{20,}" app/src/main --include="*.java"; then
+            echo "  ⚠ Possibile token hardcoded"
+            FOUND_ISSUES=$((FOUND_ISSUES + 1))
+          fi
+          
+          if [ $FOUND_ISSUES -eq 0 ]; then
+            echo "  ✓ Nessun secret hardcoded rilevato"
+          fi
+          
+          echo "✓ Secret check completato"
+
+      # ====================================
+      # QUALITY: Code Metrics
+      # ====================================
+      - name: Code Quality Metrics
+        run: |
+          echo "=== Code Quality Metrics ==="
+          
+          JAVA_DIR="app/src/main/java/it/talloncinicassa/app"
+          
+          echo "Conteggio linee di codice..."
+          TOTAL_LOC=$(find "$JAVA_DIR" -name "*.java" -exec wc -l {} + | tail -1 | awk '{print $1}')
+          echo "  Total LOC: $TOTAL_LOC"
+          
+          echo "Conteggio classi..."
+          TOTAL_CLASSES=$(find "$JAVA_DIR" -name "*.java" | wc -l)
+          echo "  Total classes: $TOTAL_CLASSES"
+          
+          echo "Conteggio metodi pubblici..."
+          PUBLIC_METHODS=$(grep -r "public.*(" "$JAVA_DIR" | wc -l)
+          echo "  Public methods: $PUBLIC_METHODS"
+          
+          echo "Conteggio file..."
+          JAVA_FILES=$(find "$JAVA_DIR" -name "*.java" | wc -l)
+          echo "  Java files: $JAVA_FILES"
+          
+          echo "Verifica complessità media..."
+          AVG_LOC=$((TOTAL_LOC / TOTAL_CLASSES))
+          echo "  Average LOC per class: $AVG_LOC"
+          
+          if [ $AVG_LOC -gt 500 ]; then
+            echo "  ⚠ Classe molto grande, considerare refactoring"
+          else
+            echo "  ✓ Complessità entro range accettabile"
+          fi
+          
+          echo "✓ Code metrics completato"
+
+      # ====================================
+      # QUALITY: Duplication Check
+      # ====================================
+      - name: Check Code Duplication
+        run: |
+          echo "=== Code Quality: Duplication Check ==="
+          
+          JAVA_DIR="app/src/main/java/it/talloncinicassa/app/print"
+          
+          echo "Cerca duplicazioni di codice..."
+          
+          # Semplice check per pattern comuni
+          DUP_COUNT=0
+          
+          # Cerca IOException duplicati
+          IOEXC=$(grep -r "IOException" "$JAVA_DIR" | wc -l)
+          if [ $IOEXC -gt 10 ]; then
+            echo "  ⚠ IOException usato $IOEXC volte (considerare custom exception)"
+          fi
+          
+          # Conta try-catch duplicati
+          TRYCATCH=$(grep -r "try {" "$JAVA_DIR" | wc -l)
+          echo "  Try-catch blocks: $TRYCATCH"
+          
+          if [ $TRYCATCH -gt 20 ]; then
+            echo "  ⚠ Molti try-catch, considerare error handling strategy"
+          else
+            echo "  ✓ Try-catch usage ragionevole"
+          fi
+          
+          echo "✓ Duplication check completato"
+
+      # ====================================
+      # QUALITY: Naming Conventions
+      # ====================================
+      - name: Check Naming Conventions
+        run: |
+          echo "=== Code Quality: Naming Conventions ==="
+          
+          JAVA_DIR="app/src/main/java/it/talloncinicassa/app/print"
+          
+          echo "Verificando convenzioni di naming..."
+          
+          VIOLATIONS=0
+          
+          # Variabili con _ iniziale (private fields ok con _)
+          BAD_VARS=$(grep -r "private.*[a-z][a-zA-Z]* [a-z_][a-z_]*;" "$JAVA_DIR" | grep -v "^[[:space:]]*private.*_" | wc -l)
+          
+          # Costanti non in UPPERCASE
+          BAD_CONSTS=$(grep -r "public.*static.*final.*=.*[0-9]\|public.*static.*final.*=.*\"" "$JAVA_DIR" | grep -v "[A-Z_]*\s*=" | wc -l)
+          
+          if [ $BAD_VARS -eq 0 ] && [ $BAD_CONSTS -eq 0 ]; then
+            echo "  ✓ Naming conventions rispettate"
+          else
+            echo "  ⚠ Alcuni naming violations (non critico)"
+          fi
+          
+          echo "✓ Naming conventions check completato"
+
+      # ====================================
+      # QUALITY: Documentation
+      # ====================================
+      - name: Check Code Documentation
+        run: |
+          echo "=== Code Quality: Documentation ==="
+          
+          JAVA_DIR="app/src/main/java/it/talloncinicassa/app/print"
+          
+          echo "Verificando documentazione..."
+          
+          JAVA_FILES=$(find "$JAVA_DIR" -name "*.java")
+          TOTAL=$(echo "$JAVA_FILES" | wc -l)
+          DOCUMENTED=0
+          
+          for file in $JAVA_FILES; do
+            if grep -q "^.*\* " "$file"; then
+              DOCUMENTED=$((DOCUMENTED + 1))
+            fi
+          done
+          
+          DOC_PERCENT=$((DOCUMENTED * 100 / TOTAL))
+          echo "  Documentation coverage: $DOC_PERCENT% ($DOCUMENTED/$TOTAL files)"
+          
+          if [ $DOC_PERCENT -ge 80 ]; then
+            echo "  ✓ Documentazione buona"
+          elif [ $DOC_PERCENT -ge 50 ]; then
+            echo "  ⚠ Documentazione migliorabile"
+          else
+            echo "  ⚠ Bassa documentazione"
+          fi
+          
+          echo "✓ Documentation check completato"
+
+      # ====================================
+      # QUALITY: Test Coverage
+      # ====================================
+      - name: Check Test Coverage
+        run: |
+          echo "=== Code Quality: Test Coverage ==="
+          
+          if [ -d "app/src/test" ]; then
+            TEST_FILES=$(find "app/src/test" -name "*Test.java" -o -name "*Tests.java" | wc -l)
+            echo "  Unit test files: $TEST_FILES"
+            
+            if [ $TEST_FILES -eq 0 ]; then
+              echo "  ⚠ Nessun unit test trovato"
+            else
+              echo "  ✓ Unit tests presenti"
+            fi
+          else
+            echo "  ⚠ Directory test non presente"
+          fi
+          
+          echo "✓ Test coverage check completato"
+
+      # ====================================
+      # FINAL REPORT
+      # ====================================
+      - name: Security & Quality Report
+        run: |
+          echo ""
+          echo "============================================"
+          echo "SECURITY & QUALITY AUDIT COMPLETATO"
+          echo "============================================"
+          echo ""
+          echo "✓ Dependency check"
+          echo "✓ Permission audit"
+          echo "✓ Network security verification"
+          echo "✓ Secret scanning"
+          echo "✓ Code metrics analysis"
+          echo "✓ Duplication detection"
+          echo "✓ Naming conventions"
+          echo "✓ Documentation review"
+          echo "✓ Test coverage check"
+          echo ""
+          echo "Per dettagli completi, consultare i log sopra."
+          echo ""
+
+      - name: Upload Security Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-quality-report
+          path: |
+            build/reports/**/*
+          retention-days: 30

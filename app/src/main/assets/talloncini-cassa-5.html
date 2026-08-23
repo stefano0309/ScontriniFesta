@@ -3484,19 +3484,33 @@ loadAll();
 <script type="text/javascript" src="printers-ui.js"></script>
 
 <script>
+// Debug: verifica che il bridge sia disponibile
+console.log('printers-ui.js caricato');
+
 // Inizializza il modulo stampanti quando il tab viene aperto
 document.querySelectorAll('.tab-btn').forEach(btn => {
   if(btn.dataset.tab === 'printersTab') {
     btn.addEventListener('click', () => {
-      setTimeout(() => PrintersModule.init(), 100);
+      console.log('Tab Stampanti aperto');
+      if(typeof PrintersModule !== 'undefined') {
+        console.log('PrintersModule disponibile, inizializzazione...');
+        setTimeout(() => PrintersModule.init(), 100);
+      } else {
+        console.error('PrintersModule NON disponibile');
+      }
     });
   }
 });
 
-// Inizializzazione al caricamento della pagina se il tab è già visibile
+// Inizializzazione al caricamento della pagina
 window.addEventListener('load', () => {
+  console.log('Pagina caricata, AndroidPrinter =', typeof AndroidPrinter);
+  console.log('PrintersModule =', typeof PrintersModule);
   if(typeof PrintersModule !== 'undefined') {
-    PrintersModule.init();
+    console.log('Inizializzazione PrintersModule al caricamento...');
+    setTimeout(() => PrintersModule.init(), 200);
+  } else {
+    console.warn('PrintersModule non è stato caricato');
   }
 });
 </script>
