@@ -1,6 +1,7 @@
 package it.talloncinicassa.app.print;
 
 import android.content.Context;
+import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
@@ -75,7 +76,7 @@ public class UsbPrinterConnection implements PrinterConnection {
             endpointOut = null;
             for (int i = 0; i < iface.getEndpointCount(); i++) {
                 UsbEndpoint ep = iface.getEndpoint(i);
-                if (ep.getDirection() == UsbEndpoint.USB_DIR_OUT) {
+                if (ep.getDirection() == UsbConstants.USB_DIR_OUT) {
                     endpointOut = ep;
                     break;
                 }
