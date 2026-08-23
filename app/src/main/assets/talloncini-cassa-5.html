@@ -656,6 +656,7 @@
       <button class="tab-btn" data-tab="cashFloatTab">💰 Fondo Cassa</button>
       <button class="tab-btn" data-tab="closeTab">Chiusura Cassa</button>
       <button class="tab-btn" data-tab="page-history">🧾 Storico</button>
+      <button class="tab-btn" data-tab="printersTab">🖨️ Stampanti</button>
       <button class="tab-btn" data-tab="settingsTab">Impostazioni</button>
     </div>
 
@@ -890,6 +891,22 @@
 
       <button class="btn-amber btn-block" id="saveSettingsBtn" style="padding:14px; font-size:15px;">Salva impostazioni</button>
       <div class="status-line" id="settingsStatus" style="text-align:center;"></div>
+    </div>
+
+    <!-- STAMPANTI TAB -->
+    <div class="tab-pane" id="printersTab">
+      <div class="panel">
+        <h2>Stampanti disponibili</h2>
+        <p class="hint">Configura le stampanti termiche ESC/POS per la stampa diretta via Bluetooth, LAN o USB.</p>
+        <button class="btn-teal btn-block" id="addPrinterBtn" style="margin-bottom:14px;" onclick="PrintersModule.addPrinterModal()">+ Aggiungi stampante</button>
+        <div id="printersListContainer"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Associa stampanti alle categorie</h2>
+        <p class="hint">Per ogni categoria del menu, seleziona la stampante a cui inviare i talloncini.</p>
+        <div id="categoryAssignmentsContainer"></div>
+      </div>
     </div>
 
     <!-- STORICO TAB -->
@@ -3462,6 +3479,26 @@ loadAll();
   // se il tab è già aperto.
   window.renderAdminHistory = renderAdminHistory;
 })();
+</script>
+
+<script type="text/javascript" src="printers-ui.js"></script>
+
+<script>
+// Inizializza il modulo stampanti quando il tab viene aperto
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if(btn.dataset.tab === 'printersTab') {
+    btn.addEventListener('click', () => {
+      setTimeout(() => PrintersModule.init(), 100);
+    });
+  }
+});
+
+// Inizializzazione al caricamento della pagina se il tab è già visibile
+window.addEventListener('load', () => {
+  if(typeof PrintersModule !== 'undefined') {
+    PrintersModule.init();
+  }
+});
 </script>
 
 </body>

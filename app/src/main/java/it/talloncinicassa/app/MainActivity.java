@@ -16,6 +16,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import it.talloncinicassa.app.print.AndroidPrinterInterface;
+
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -41,6 +43,8 @@ public class MainActivity extends Activity {
 
     private static final String ASSET_URL =
             "file:///android_asset/talloncini-cassa-5.html";
+
+    private AndroidPrinterInterface printerInterface;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,6 +88,27 @@ public class MainActivity extends Activity {
                 new AndroidDownloadInterface(),
                 "AndroidDownload"
         );
+
+        /*
+         * Bridge JS -> Android per il sistema di stampa nativo.
+         * La webapp può controllare stampanti Bluetooth, LAN e USB direttamente.
+         */
+        printerInterface = new AndroidPrinterInterface(this, new AndroidPrinterInterface.Callback() {
+            @Override
+            public void onMessage(String message) {
+                runOnUiThread(() ->
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show()
+                );
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() ->
+                    Toast.makeText(MainActivity.this, "Errore stampa: " + error, Toast.LENGTH_LONG).show()
+                );
+            }
+        });
+        webView.addJavascriptInterface(printerInterface, "AndroidPrinter");
 
         /*
          * IMPORTAZIONE CSV / JSON
