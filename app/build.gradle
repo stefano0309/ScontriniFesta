@@ -22,12 +22,22 @@ android {
     }
 }
 
-// RIMOSSO: il blocco resolutionStrategy che forzava
-// org.jetbrains.kotlin:kotlin-stdlib* alla versione 1.8.22 (2023). Il
-// progetto non applica alcun plugin Kotlin: non c'è codice Kotlin da
-// compilare, quindi non serve alcuna versione forzata dello stdlib.
-// Forzare una versione così vecchia rispetto ad AndroidX aggiornato a
-// compileSdk 35 può generare warning/incompatibilità di metadata inutili.
+// Il progetto non applica alcun plugin Kotlin (nessun codice Kotlin da
+// compilare), ma diverse dipendenze AndroidX (androidx.core, androidx.activity)
+// portano transitivamente kotlin-stdlib. Senza il plugin Kotlin non scatta
+// l'allineamento automatico delle versioni: kotlin-stdlib può finire risolto
+// a una versione diversa da kotlin-stdlib-jdk7/-jdk8, che dalla 1.8 in poi
+// contengono classi già incluse in kotlin-stdlib stesso -> "duplicate class"
+// in fase di merge (vedi errore checkDebugDuplicateClasses). Si forzano
+// quindi tutti e tre i moduli sulla STESSA versione per evitare la
+// sovrapposizione.
+configurations.all {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24'
+    }
+}
 
 dependencies {
     // Necessario per androidx.activity.ComponentActivity, la Activity
