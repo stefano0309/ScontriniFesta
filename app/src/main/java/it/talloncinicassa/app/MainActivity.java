@@ -71,6 +71,13 @@ public class MainActivity extends ComponentActivity {
         registerActivityResultLaunchers();
         registerBackPressedHandler();
 
+        // DIAGNOSTICA: abilita l'ispezione remota via chrome://inspect solo
+        // nelle build debuggabili (non in release), per poter vedere lo
+        // stack trace completo degli errori JS dal telefono via USB.
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
+
         // Sfondo scuro dietro le barre di sistema: con l'edge-to-edge forzato
         // da targetSdk 35, setStatusBarColor/setNavigationBarColor non hanno
         // più effetto affidabile, quindi coloriamo direttamente la decor view.
@@ -222,6 +229,21 @@ public class MainActivity extends ComponentActivity {
          * IMPORTAZIONE CSV / JSON
          */
         webView.setWebChromeClient(new WebChromeClient() {
+
+            /*
+             * DIAGNOSTICA: gli errori/console.error della pagina non erano
+             * altrimenti visibili se non collegando un debugger. Loggandoli
+             * su Logcat con tag dedicato si può recuperare lo stack reale
+             * con "adb logcat -s CassaWebConsole" senza strumenti aggiuntivi.
+             */
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage cm) {
+                android.util.Log.d(
+                        "CassaWebConsole",
+                        cm.message() + " -- " + cm.sourceId() + ":" + cm.lineNumber()
+                );
+                return true;
+            }
 
             @Override
             public boolean onShowFileChooser(
