@@ -1,11 +1,9 @@
 package it.talloncinicassa.app;
 
-import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.View;
 import android.webkit.DownloadListener;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
@@ -16,19 +14,39 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
 import it.talloncinicassa.app.print.AndroidPrinterInterface;
 
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
-public class MainActivity extends Activity {
-
-    private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
-    private static final int CREATE_FILE_REQUEST_CODE = 1002;
+/*
+ * MODERNIZZAZIONE (compileSdk/targetSdk 35 - Android 15):
+ * - Activity -> ComponentActivity, per usare la Activity Result API e
+ *   OnBackPressedCallback al posto delle API deprecate.
+ * - startActivityForResult/onActivityResult sostituiti da
+ *   registerForActivityResult (deprecati dalla Activity 1.2).
+ * - onBackPressed() sostituito da OnBackPressedCallback (deprecato dalla
+ *   API 33).
+ * - Le vecchie View.SYSTEM_UI_FLAG_* e setStatusBarColor/setNavigationBarColor
+ *   sono deprecate e, a partire da targetSdk 35, l'edge-to-edge è forzato dal
+ *   sistema: sostituite con WindowCompat/WindowInsetsControllerCompat.
+ */
+public class MainActivity extends ComponentActivity {
 
     private WebView webView;
 
     private ValueCallback<Uri[]> filePathCallback;
+
+    private ActivityResultLauncher<Intent> fileChooserLauncher;
+    private ActivityResultLauncher<Intent> createDocumentLauncher;
 
     // Dati del file che l'utente vuole esportare
     private byte[] pendingFileBytes;
@@ -50,8 +68,13 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        getWindow().setStatusBarColor(0xFF1C1E22);
-        getWindow().setNavigationBarColor(0xFF1C1E22);
+        registerActivityResultLaunchers();
+        registerBackPressedHandler();
+
+        // Sfondo scuro dietro le barre di sistema: con l'edge-to-edge forzato
+        // da targetSdk 35, setStatusBarColor/setNavigationBarColor non hanno
+        // più effetto affidabile, quindi coloriamo direttamente la decor view.
+        getWindow().getDecorView().setBackgroundColor(0xFF1C1E22);
 
         webView = new WebView(this);
         setContentView(webView);
@@ -61,6 +84,91 @@ public class MainActivity extends Activity {
         hideSystemUi();
 
         webView.loadUrl(ASSET_URL);
+    }
+
+    /*
+     * Registra i launcher della Activity Result API al posto di
+     * startActivityForResult/onActivityResult (deprecati).
+     * Va fatto prima che l'Activity raggiunga lo stato STARTED, quindi in
+     * onCreate prima di ogni possibile launch().
+     */
+    private void registerActivityResultLaunchers() {
+
+        fileChooserLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (filePathCallback == null) return;
+
+                    Uri[] results = null;
+                    Intent data = result.getData();
+
+                    if (result.getResultCode() == RESULT_OK && data != null) {
+                        Uri uri = data.getData();
+                        if (uri != null) {
+                            results = new Uri[]{uri};
+                        }
+                    }
+
+                    filePathCallback.onReceiveValue(results);
+                    filePathCallback = null;
+                }
+        );
+
+        createDocumentLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        saveToUri(result.getData().getData());
+                    } else {
+                        pendingFileBytes = null;
+                        pendingFileName = null;
+                        pendingMimeType = null;
+
+                        Toast.makeText(
+                                this,
+                                "Esportazione annullata.",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    }
+                }
+        );
+    }
+
+    /*
+     * Sostituisce onBackPressed() (deprecato dalla API 33) con
+     * OnBackPressedCallback registrato sul dispatcher dell'Activity.
+     */
+    private void registerBackPressedHandler() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+
+                /*
+                 * Evita di uscire per sbaglio dall'app durante il lavoro in
+                 * cassa: la prima pressione avvisa, solo una seconda
+                 * pressione entro pochi secondi chiude davvero l'app.
+                 */
+                long now = System.currentTimeMillis();
+
+                if (now - lastBackPressTime < BACK_PRESS_EXIT_WINDOW_MS) {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                } else {
+                    lastBackPressTime = now;
+
+                    Toast.makeText(
+                            MainActivity.this,
+                            "Premi di nuovo \"Indietro\" per uscire dall'app.",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                }
+            }
+        });
     }
 
     private void setupWebView() {
@@ -137,10 +245,7 @@ public class MainActivity extends Activity {
                             Intent.CATEGORY_OPENABLE
                     );
 
-                    startActivityForResult(
-                            intent,
-                            FILE_CHOOSER_REQUEST_CODE
-                    );
+                    fileChooserLauncher.launch(intent);
 
                 } catch (ActivityNotFoundException e) {
 
@@ -614,10 +719,7 @@ public class MainActivity extends Activity {
 
         try {
 
-            startActivityForResult(
-                    intent,
-                    CREATE_FILE_REQUEST_CODE
-            );
+            createDocumentLauncher.launch(intent);
 
         } catch (ActivityNotFoundException e) {
 
@@ -776,85 +878,6 @@ public class MainActivity extends Activity {
 
     /*
      * ---------------------------------------------------------
-     * FILE PICKER RESULT
-     * ---------------------------------------------------------
-     */
-
-    @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data) {
-
-        super.onActivityResult(
-                requestCode,
-                resultCode,
-                data
-        );
-
-        /*
-         * IMPORT CSV / JSON
-         */
-        if (requestCode ==
-                FILE_CHOOSER_REQUEST_CODE) {
-
-            if (filePathCallback == null) {
-                return;
-            }
-
-            Uri[] results = null;
-
-            if (resultCode == RESULT_OK
-                    && data != null) {
-
-                Uri uri =
-                        data.getData();
-
-                if (uri != null) {
-                    results =
-                            new Uri[]{uri};
-                }
-            }
-
-            filePathCallback
-                    .onReceiveValue(results);
-
-            filePathCallback = null;
-
-            return;
-        }
-
-        /*
-         * EXPORT
-         */
-        if (requestCode ==
-                CREATE_FILE_REQUEST_CODE) {
-
-            if (resultCode == RESULT_OK
-                    && data != null) {
-
-                Uri uri =
-                        data.getData();
-
-                saveToUri(uri);
-
-            } else {
-
-                pendingFileBytes = null;
-                pendingFileName = null;
-                pendingMimeType = null;
-
-                Toast.makeText(
-                        this,
-                        "Esportazione annullata.",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
-        }
-    }
-
-    /*
-     * ---------------------------------------------------------
      * JAVASCRIPT ESCAPE
      * ---------------------------------------------------------
      */
@@ -880,17 +903,21 @@ public class MainActivity extends Activity {
 
     private void hideSystemUi() {
 
-        getWindow()
-                .getDecorView()
-                .setSystemUiVisibility(
+        // BUG FIX / MODERNIZZAZIONE: View.SYSTEM_UI_FLAG_* è deprecato dalla
+        // API 30 e, con targetSdk 35, l'edge-to-edge forzato dal sistema rende
+        // questo approccio inaffidabile. Si usa invece
+        // WindowCompat/WindowInsetsControllerCompat per ottenere lo stesso
+        // comportamento "kiosk" (barre di sistema nascoste, richiamabili con
+        // uno swipe) in modo supportato su tutte le versioni da minSdk 23 in su.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
-                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                );
+        WindowInsetsControllerCompat controller =
+                WindowCompat.getInsetsController(getWindow(), webView);
+
+        controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        );
+        controller.hide(WindowInsetsCompat.Type.systemBars());
     }
 
     @Override
@@ -919,44 +946,11 @@ public class MainActivity extends Activity {
     }
 
     /*
-     * ---------------------------------------------------------
-     * BACK
-     * ---------------------------------------------------------
+     * La gestione del tasto "indietro" è ora registrata in
+     * registerBackPressedHandler() (chiamato da onCreate) tramite
+     * OnBackPressedCallback, che sostituisce onBackPressed() (deprecato
+     * dalla API 33).
      */
-
-    @Override
-    public void onBackPressed() {
-
-        if (webView != null
-                && webView.canGoBack()) {
-
-            webView.goBack();
-
-            return;
-        }
-
-        /*
-         * Evita di uscire per sbaglio dall'app durante il lavoro in cassa:
-         * la prima pressione avvisa, solo una seconda pressione entro pochi
-         * secondi chiude davvero l'app.
-         */
-        long now = System.currentTimeMillis();
-
-        if (now - lastBackPressTime < BACK_PRESS_EXIT_WINDOW_MS) {
-
-            super.onBackPressed();
-
-        } else {
-
-            lastBackPressTime = now;
-
-            Toast.makeText(
-                    this,
-                    "Premi di nuovo \"Indietro\" per uscire dall'app.",
-                    Toast.LENGTH_SHORT
-            ).show();
-        }
-    }
 
     /*
      * ---------------------------------------------------------

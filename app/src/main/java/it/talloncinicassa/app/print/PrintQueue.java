@@ -133,13 +133,13 @@ public class PrintQueue {
             throw new IOException("Contenuto job vuoto");
         }
 
-        PrinterConfig config = printerManager.getPrinter(job.printerName);
+        PrinterConfig config = printerManager.getPrinter(job.printerId);
         if (config == null) {
-            throw new IOException("Stampante non trovata: " + job.printerName);
+            throw new IOException("Stampante non trovata: " + job.printerId);
         }
 
         if (!config.isValid()) {
-            throw new IOException("Configurazione stampante non valida: " + job.printerName);
+            throw new IOException("Configurazione stampante non valida: " + config.name);
         }
 
         PrinterConnection connection = printerManager.createConnection(config);

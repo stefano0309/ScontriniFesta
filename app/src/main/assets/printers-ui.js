@@ -261,11 +261,14 @@
       return;
     }
 
-    flash('Test di stampa in corso...');
-    
+    flash('Test di stampa in corso su "' + printer.name + '"...');
+
     try {
-      // Chiama il test per una categoria fittizia
-      AndroidPrinter.testPrint('__TEST__');
+      // BUG FIX: prima veniva chiamato testPrint('__TEST__'), una categoria
+      // fittizia a cui non è mai assegnata alcuna stampante, quindi il test
+      // falliva sempre indipendentemente dal pulsante premuto. Ora si testa
+      // direttamente la stampante scelta tramite il suo ID.
+      AndroidPrinter.testPrintPrinter(printerId);
     } catch (e) {
       alert('Errore nel test: ' + e.message);
     }

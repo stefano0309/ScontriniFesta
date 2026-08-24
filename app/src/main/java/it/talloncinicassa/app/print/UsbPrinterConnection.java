@@ -1,20 +1,35 @@
 package it.talloncinicassa.app.print;
 
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Connessione USB OTG per stampanti ESC/POS.
  */
 public class UsbPrinterConnection implements PrinterConnection {
+
+    // BUG FIX: prima non esisteva alcun meccanismo di richiesta permesso USB.
+    // openDevice() falliva silenziosamente (ritornava null) se l'utente non
+    // aveva già concesso il permesso in precedenza, e non veniva mai chiesto.
+    private static final String ACTION_USB_PERMISSION =
+            "it.talloncinicassa.app.print.USB_PERMISSION";
+    private static final long PERMISSION_TIMEOUT_SECONDS = 15;
 
     private final Context context;
     private final PrinterConfig config;
@@ -53,6 +68,20 @@ public class UsbPrinterConnection implements PrinterConnection {
         if (device == null) {
             throw new IOException("Stampante USB non trovata (VID:PID " + 
                 config.usbVendorId + ":" + config.usbProductId + ")");
+        }
+
+        // Se il permesso non è già stato concesso, lo richiediamo e attendiamo
+        // la risposta dell'utente (connect() è documentato come bloccante e va
+        // sempre invocato da un thread in background: qui lo sfruttiamo per
+        // aspettare in modo sincrono l'esito del dialog di sistema).
+        if (!usbManager.hasPermission(device)) {
+            logger.d("USB", "Permesso non concesso, lo richiedo per " + device.getDeviceName());
+            if (!requestPermissionAndWait(device)) {
+                throw new IOException(
+                    "Permesso USB non concesso per la stampante (VID:PID " +
+                    config.usbVendorId + ":" + config.usbProductId + ")"
+                );
+            }
         }
 
         logger.d("USB", "Connessione a stampante USB " + device.getDeviceName());
@@ -95,6 +124,69 @@ public class UsbPrinterConnection implements PrinterConnection {
                 deviceConnection = null;
             }
             throw e;
+        }
+    }
+
+    /**
+     * Richiede il permesso di accesso al dispositivo USB e attende (con
+     * timeout) l'esito scelto dall'utente nel dialog di sistema.
+     * @return true se il permesso è stato concesso
+     */
+    private boolean requestPermissionAndWait(UsbDevice device) {
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean granted = new AtomicBoolean(false);
+
+        BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent intent) {
+                if (ACTION_USB_PERMISSION.equals(intent.getAction())) {
+                    synchronized (this) {
+                        boolean permission = intent.getBooleanExtra(
+                                UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                        granted.set(permission);
+                        latch.countDown();
+                    }
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            context.registerReceiver(receiver, filter);
+        }
+
+        try {
+            int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Dall'API 31 i PendingIntent inviati a componenti di sistema
+                // devono dichiarare esplicitamente FLAG_MUTABLE o FLAG_IMMUTABLE.
+                // UsbManager.requestPermission scrive extra nell'intent, quindi
+                // serve MUTABLE.
+                pendingIntentFlags |= PendingIntent.FLAG_MUTABLE;
+            }
+
+            PendingIntent permissionIntent = PendingIntent.getBroadcast(
+                    context, 0, new Intent(ACTION_USB_PERMISSION), pendingIntentFlags);
+
+            usbManager.requestPermission(device, permissionIntent);
+
+            boolean completed = latch.await(PERMISSION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            if (!completed) {
+                logger.w("USB", "Timeout in attesa del permesso USB");
+                return false;
+            }
+            return granted.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            try {
+                context.unregisterReceiver(receiver);
+            } catch (IllegalArgumentException ignored) {
+                // già derregistrato
+            }
         }
     }
 

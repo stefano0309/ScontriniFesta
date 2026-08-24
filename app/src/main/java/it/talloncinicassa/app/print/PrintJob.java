@@ -21,7 +21,11 @@ public class PrintJob {
     public final long createdAt;
     public final int ticketNumber;
     public final String category;
-    public final String printerName;
+    // NOTA: deve contenere l'ID univoco della stampante (PrinterConfig.id),
+    // non il nome visualizzato. PrinterManager.getPrinter() cerca per ID:
+    // passare il nome qui causava un mismatch che faceva fallire ogni job
+    // con "Stampante non trovata".
+    public final String printerId;
     public final String content;
     public final int copies;
 
@@ -34,7 +38,7 @@ public class PrintJob {
     public PrintJob(
             int ticketNumber,
             String category,
-            String printerName,
+            String printerId,
             String content,
             int copies
     ) {
@@ -42,7 +46,7 @@ public class PrintJob {
         this.createdAt = System.currentTimeMillis();
         this.ticketNumber = ticketNumber;
         this.category = category;
-        this.printerName = printerName;
+        this.printerId = printerId;
         this.content = content;
         this.copies = Math.max(1, copies);
         this.state = State.QUEUED;
@@ -54,8 +58,8 @@ public class PrintJob {
     @Override
     public String toString() {
         return String.format(
-                "PrintJob{jobId=%s, ticket=%d, printer=%s, state=%s}",
-                jobId, ticketNumber, printerName, state
+                "PrintJob{jobId=%s, ticket=%d, printerId=%s, state=%s}",
+                jobId, ticketNumber, printerId, state
         );
     }
 }

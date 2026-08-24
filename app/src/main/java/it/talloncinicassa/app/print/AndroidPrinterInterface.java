@@ -156,7 +156,11 @@ public class AndroidPrinterInterface {
             }
 
             int finalCopies = copies > 0 ? copies : printerManager.getCopiesForCategory(category);
-            printerManager.print(ticketNumber, category, printer.name, content, finalCopies);
+            // BUG FIX: bisogna passare l'ID della stampante (printer.id), non il
+            // nome (printer.name). PrinterManager/PrintQueue risolvono il job
+            // cercando per ID: passare il nome faceva fallire ogni stampa con
+            // "Stampante non trovata".
+            printerManager.print(ticketNumber, category, printer.id, content, finalCopies);
             logger.i("AndroidPrinter", "Stampa accodata: ticket " + ticketNumber + ", categoria " + category);
         } catch (Exception e) {
             logger.e("AndroidPrinter", "print error", e);
@@ -165,8 +169,8 @@ public class AndroidPrinterInterface {
     }
 
     /**
-     * Test di stampa per una categoria.
-     * Stampa un ticket di prova su tutte le stampanti della categoria.
+     * Test di stampa per una categoria (stampa sulla stampante assegnata
+     * a quella categoria, se presente).
      */
     @JavascriptInterface
     public void testPrint(String category) {
@@ -178,22 +182,51 @@ public class AndroidPrinterInterface {
                 }
                 return;
             }
-
-            // Genera ticket di prova
-            EscPosPrinter escPos = new EscPosPrinter(printer);
-            byte[] testData = escPos.initialize();
-            String testContent = new String(testData) + "\n=== TEST DI STAMPA ===\n" +
-                    "Stampante: " + printer.name + "\n" +
-                    "Tipo: " + printer.type + "\n" +
-                    "Data: " + new java.util.Date().toString() + "\n" +
-                    "================\n\n";
-
-            printerManager.print(9999, category, printer.name, testContent, 1);
+            queueTestTicket(printer);
             logger.i("AndroidPrinter", "Test di stampa avviato per categoria: " + category);
         } catch (Exception e) {
             logger.e("AndroidPrinter", "testPrint error", e);
             if (callback != null) callback.onError("Errore nel test di stampa: " + e.getMessage());
         }
+    }
+
+    /**
+     * Test di stampa per una specifica stampante, indipendentemente da
+     * eventuali assegnazioni a categorie.
+     * BUG FIX: prima il pulsante "Test" del tab Stampanti chiamava sempre
+     * testPrint('__TEST__'), una categoria fittizia a cui non è mai
+     * assegnata alcuna stampante: il test falliva sempre, qualunque
+     * stampante si premesse. Questo metodo testa davvero la stampante
+     * indicata da printerId.
+     */
+    @JavascriptInterface
+    public void testPrintPrinter(String printerId) {
+        try {
+            PrinterConfig printer = printerManager.getPrinter(printerId);
+            if (printer == null) {
+                if (callback != null) {
+                    callback.onError("Stampante non trovata");
+                }
+                return;
+            }
+            queueTestTicket(printer);
+            logger.i("AndroidPrinter", "Test di stampa avviato per stampante: " + printer.name);
+        } catch (Exception e) {
+            logger.e("AndroidPrinter", "testPrintPrinter error", e);
+            if (callback != null) callback.onError("Errore nel test di stampa: " + e.getMessage());
+        }
+    }
+
+    private void queueTestTicket(PrinterConfig printer) {
+        EscPosPrinter escPos = new EscPosPrinter(printer);
+        byte[] testData = escPos.initialize();
+        String testContent = new String(testData) + "\n=== TEST DI STAMPA ===\n" +
+                "Stampante: " + printer.name + "\n" +
+                "Tipo: " + printer.type + "\n" +
+                "Data: " + new java.util.Date().toString() + "\n" +
+                "================\n\n";
+
+        printerManager.print(9999, "__TEST__", printer.id, testContent, 1);
     }
 
     /**

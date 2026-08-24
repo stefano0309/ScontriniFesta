@@ -76,6 +76,18 @@ public class PrinterManager {
         } else if ("network".equals(config.type) && parts.length > 3) {
             config.networkAddress = parts[3];
             if (parts.length > 4) config.networkPort = Integer.parseInt(parts[4]);
+        } else if ("usb".equals(config.type) && parts.length > 3) {
+            // BUG FIX: prima questo ramo non esisteva, quindi vendorId/productId
+            // non venivano mai ricaricati e la stampante USB risultava sempre
+            // non valida (isValid() richiede usbVendorId > 0) dopo un riavvio.
+            try {
+                config.usbVendorId = Integer.parseInt(parts[3]);
+                if (parts.length > 4) config.usbProductId = Integer.parseInt(parts[4]);
+                if (parts.length > 5) config.usbInterfaceIndex = Integer.parseInt(parts[5]);
+            } catch (NumberFormatException ignored) {
+                // Configurazione corrotta: lasciamo i valori di default (0),
+                // isValid() la segnalerà correttamente come non valida.
+            }
         }
 
         return config;
@@ -96,6 +108,12 @@ public class PrinterManager {
         } else if ("network".equals(config.type)) {
             sb.append("|").append(config.networkAddress);
             sb.append("|").append(config.networkPort);
+        } else if ("usb".equals(config.type)) {
+            // BUG FIX: prima vendorId/productId/interfaceIndex non venivano
+            // salvati affatto per le stampanti USB.
+            sb.append("|").append(config.usbVendorId);
+            sb.append("|").append(config.usbProductId);
+            sb.append("|").append(config.usbInterfaceIndex);
         }
 
         prefs.edit()
