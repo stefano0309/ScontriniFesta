@@ -49,10 +49,24 @@ jobs:
       - name: Verify Capacitor printer bridge
         run: |
           grep -q "registerPlugin('ThermalPrinter')" www/printers-ui.js
+          grep -q "requestPermissions" www/printers-ui.js
           grep -q "discoverPrinters" www/printers-ui.js
           grep -q "printText" www/printers-ui.js
           grep -q "connectPrinter" www/printers-ui.js
           echo "✓ API ThermalPrinter collegata"
+
+      - name: Verify Android runtime permission declarations
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.BLUETOOTH_SCAN' "$MANIFEST"
+          grep -q 'android.permission.BLUETOOTH_CONNECT' "$MANIFEST"
+          grep -q 'android.permission.BLUETOOTH' "$MANIFEST"
+          grep -q 'android.permission.BLUETOOTH_ADMIN' "$MANIFEST"
+          grep -q 'android.permission.ACCESS_NETWORK_STATE' "$MANIFEST"
+          grep -q 'android.permission.ACCESS_WIFI_STATE' "$MANIFEST"
+          grep -q 'android.permission.CHANGE_WIFI_MULTICAST_STATE' "$MANIFEST"
+          grep -q 'android.hardware.usb.host' "$MANIFEST"
+          echo "✓ Permessi Bluetooth/LAN/USB dichiarati"
 
       - name: Verify JavaScript syntax
         run: |
@@ -101,6 +115,7 @@ jobs:
           echo "============================================"
           echo "✓ Plugin npm presente"
           echo "✓ Bridge ThermalPrinter presente"
+          echo "✓ Permessi Android verificati"
           echo "✓ JavaScript verificato"
           echo "✓ Capacitor sincronizzato"
           echo "✓ Android SDK 36 + JDK 21"
