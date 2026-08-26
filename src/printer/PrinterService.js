@@ -1,24 +1,15 @@
 /**
  * Unified thermal-printer service.
- * Uses @delicity/capacitor-thermal-printer when running inside Capacitor.
- * Keeps the legacy AndroidPrinter bridge as a fallback during migration.
+ * The concrete Capacitor bridge is exposed by www/printers-ui.js as
+ * window.ThermalPrinter. AndroidPrinter remains a compatibility fallback.
  */
 
-let plugin = null;
-
 function getPlugin() {
-  if (plugin) return plugin;
   try {
-    // Capacitor plugins exposed through the web runtime are available from the
-    // global Capacitor registry. This avoids requiring a bundler in the current
-    // single-file webapp.
-    const cap = window.Capacitor;
-    if (cap?.Plugins?.ThermalPrinter) {
-      plugin = cap.Plugins.ThermalPrinter;
-      return plugin;
-    }
+    if (window.ThermalPrinter) return window.ThermalPrinter;
+    if (window.PrintersModule?.getPlugin) return window.PrintersModule.getPlugin();
   } catch (e) {
-    console.warn('[PrinterService] ThermalPrinter plugin unavailable', e);
+    console.warn('[PrinterService] ThermalPrinter unavailable', e);
   }
   return null;
 }
@@ -29,21 +20,39 @@ export const PrinterService = {
   },
 
   isAvailable() {
-    return !!getPlugin() || typeof window.AndroidPrinter !== 'undefined';
+    return !!getPlugin() || !!window.AndroidPrinter;
   },
 
-  async print(options) {
+  async print(options = {}) {
     const p = getPlugin();
-    if (p) {
-      // Adapter point for the plugin API. Keep all plugin-specific calls here
-      // so the rest of the webapp does not depend on native implementation details.
-      if (typeof p.printText === 'function' && options.text) {
-        return p.printText({ text: options.text });
-      }
-      if (typeof p.printImage === 'function' && options.image) {
-        return p.printImage({ image: options.image });
-      }
-      throw new Error('ThermalPrinter plugin trovato, ma nessun metodo di stampa compatibile è disponibile.');
+    if (p?.printText && options.items) {
+      return p.printText({
+        printerId: options.printerId,
+        items: options.items,
+        encoding: options.encoding || 'WPC1252',
+        paperWidthMm: options.paperWidthMm,
+        timeoutMs: options.timeoutMs || 15000,
+        autoReconnect: options.autoReconnect !== false
+      });
+    }
+
+    if (p?.printText && options.text) {
+      return p.printText({
+        printerId: options.printerId,
+        items: [{ type: 'text', value: String(options.text) }],
+        encoding: options.encoding || 'WPC1252',
+        autoReconnect: options.autoReconnect !== false
+      });
+    }
+
+    if (p?.printImage && options.image) {
+      return p.printImage({
+        printerId: options.printerId,
+        image: options.image,
+        render: options.render,
+        timeoutMs: options.timeoutMs || 15000,
+        autoReconnect: options.autoReconnect !== false
+      });
     }
 
     if (window.AndroidPrinter?.print) {
@@ -59,13 +68,12 @@ export const PrinterService = {
   },
 
   async test(printerId) {
-    if (window.AndroidPrinter?.testPrintPrinter && printerId) {
-      return window.AndroidPrinter.testPrintPrinter(printerId);
+    if (window.PrintersModule?.testPrint) {
+      return window.PrintersModule.testPrint(printerId);
     }
 
-    const p = getPlugin();
-    if (p?.printText) {
-      return p.printText({ text: '\n\n*** TEST STAMPANTE ***\nTabby\n\n' });
+    if (window.AndroidPrinter?.testPrintPrinter && printerId) {
+      return window.AndroidPrinter.testPrintPrinter(printerId);
     }
 
     throw new Error('Servizio di stampa non disponibile.');
