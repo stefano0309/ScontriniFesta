@@ -1,0 +1,104 @@
+name: Refactor monolithic webapp
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Split index.html without changing application logic
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import shutil
+
+          src = Path('www/index.html')
+          if not src.exists():
+              raise SystemExit('www/index.html non trovato')
+
+          html = src.read_text(encoding='utf-8')
+          backup = Path('www/index.monolithic.backup.html')
+          if not backup.exists():
+              shutil.copy2(src, backup)
+
+          css_dir = Path('www/css')
+          js_dir = Path('www/js')
+          css_dir.mkdir(parents=True, exist_ok=True)
+          js_dir.mkdir(parents=True, exist_ok=True)
+
+          # Extract every inline <style> block verbatim.
+          styles = re.findall(r'<style(?:\\s[^>]*)?>(.*?)</style>', html, flags=re.I|re.S)
+          if styles:
+              css = '\n\n'.join(s.strip() for s in styles).strip() + '\n'
+              (css_dir / 'app.css').write_text(css, encoding='utf-8')
+              html = re.sub(r'<style(?:\\s[^>]*)?>.*?</style>', '', html, flags=re.I|re.S)
+
+          # Extract every inline script block, preserving external scripts.
+          scripts = re.findall(r'<script(?![^>]*\\bsrc\\s*=)(?:\\s[^>]*)?>(.*?)</script>', html, flags=re.I|re.S)
+          if scripts:
+              js = '\n\n'.join(s.strip() for s in scripts).strip() + '\n'
+              (js_dir / 'app.js').write_text(js, encoding='utf-8')
+              html = re.sub(r'<script(?![^>]*\\bsrc\\s*=)(?:\\s[^>]*)?>.*?</script>', '', html, flags=re.I|re.S)
+
+          # Keep loading order: CSS before the body, JS just before </body>.
+          if styles:
+              marker = '<link rel="stylesheet" href="css/app.css">'
+              html = html.replace('</head>', f'  {marker}\n</head>', 1)
+          if scripts:
+              marker = '<script src="js/app.js"></script>'
+              if '</body>' in html:
+                  html = html.replace('</body>', f'  {marker}\n</body>', 1)
+              else:
+                  html += '\n' + marker + '\n'
+
+          src.write_text(html, encoding='utf-8')
+
+      - name: Verify refactor is structurally safe
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          html = Path('www/index.html').read_text(encoding='utf-8')
+          assert '<style' not in html.lower(), 'È rimasto CSS inline in index.html'
+          assert re.search(r'<script(?![^>]*\\bsrc\\s*=)', html, re.I) is None, 'È rimasto JavaScript inline in index.html'
+          assert Path('www/css/app.css').exists(), 'www/css/app.css mancante'
+          assert Path('www/js/app.js').exists(), 'www/js/app.js mancante'
+          assert Path('www/index.monolithic.backup.html').exists(), 'Backup mancante'
+          assert 'css/app.css' in html, 'CSS non collegato'
+          assert 'js/app.js' in html, 'JS non collegato'
+          print('Refactor strutturale verificato.')
+
+      - name: Validate JavaScript syntax
+        run: node --check www/js/app.js
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capacitor sync
+        run: npx cap sync android
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="refactor/split-index-html-${GITHUB_RUN_ID}"
+          git checkout -b "$BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add www/index.html www/index.monolithic.backup.html www/css/app.css www/js/app.js android
+          git diff --cached --quiet && { echo "Nessuna modifica da proporre"; exit 0; }
+          git commit -m "refactor(web): split monolithic index.html"
+          git push --set-upstream origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" --title "refactor: split monolithic index.html" --body "## Refactor sicuro della webapp\n\nQuesta PR separa il CSS e il JavaScript inline da \\`www/index.html\\` senza modificare intenzionalmente la logica applicativa.\n\n### Inclusi\n- \\`www/css/app.css\\`\n- \\`www/js/app.js\\`\n- backup di \\`www/index.html\\`\n- verifica sintattica JavaScript\n- Capacitor sync\n\n### Prossima fase\nDopo la verifica della PR, il JavaScript potrà essere suddiviso per responsabilità (cassa, ordini, menu, pagamenti, admin, storico, stampanti) senza toccare il comportamento dell'app."
