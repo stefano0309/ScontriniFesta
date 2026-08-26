@@ -1,0 +1,30 @@
+{
+  "name": "tabby",
+  "version": "1.0.0",
+  "description": "Questo progetto trasforma `talloncini-cassa-5.html` in una vera app Android tramite WebView.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stefano0309/ScontriniFesta.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/stefano0309/ScontriniFesta/issues"
+  },
+  "homepage": "https://github.com/stefano0309/ScontriniFesta#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "typescript": "^7.0.2"
+  }
+}

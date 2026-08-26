@@ -2,329 +2,188 @@ name: Printer System Tests
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
       - master
     paths:
-      - 'app/src/main/java/it/talloncinicassa/app/print/**'
-      - 'app/src/main/assets/printers-ui.js'
+      - 'www/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
       - '.github/workflows/printer-tests.yml'
 
+
 jobs:
+
   printer-tests:
+
+    name: Printer Architecture Tests
+
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+
+    timeout-minutes: 25
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+
+      # ========================================================
+      # NODE
+      # ========================================================
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+
+      - name: Install dependencies
+        run: npm ci
+
+
+      # ========================================================
+      # PROJECT STRUCTURE
+      # ========================================================
+
+      - name: Verify Printer Architecture
+        run: |
+
+          echo "=== PRINTER ARCHITECTURE ==="
+
+          test -d www
+
+          echo "✓ Webapp presente"
+
+          # Cerca i servizi printer senza imporre un nome preciso
+          PRINTER_FILES=$(find www -type f \
+            \( -iname "*printer*" -o -iname "*escpos*" \))
+
+          if [ -z "$PRINTER_FILES" ]; then
+            echo "⚠ Nessun modulo printer trovato"
+            echo "Questo test verrà reso obbligatorio quando il nuovo PrinterService sarà implementato."
+          else
+            echo "Moduli printer trovati:"
+            echo "$PRINTER_FILES"
+          fi
+
+
+      # ========================================================
+      # ESC/POS
+      # ========================================================
+
+      - name: Verify ESC/POS Layer
+        run: |
+
+          echo "=== ESC/POS ==="
+
+          ESC_FILES=$(find . -type f \
+            \( -iname "*escpos*" -o -iname "*esc-pos*" \) \
+            -not -path "./node_modules/*")
+
+          if [ -z "$ESC_FILES" ]; then
+            echo "⚠ Modulo ESC/POS non ancora trovato"
+          else
+            echo "$ESC_FILES"
+            echo "✓ Modulo ESC/POS individuato"
+          fi
+
+
+      # ========================================================
+      # JAVASCRIPT SYNTAX
+      # ========================================================
+
+      - name: Test Printer JavaScript
+        run: |
+
+          echo "=== PRINTER JAVASCRIPT ==="
+
+          JS_FILES=$(find www -type f -name "*.js")
+
+          for file in $JS_FILES; do
+
+            node --check "$file"
+
+            echo "✓ $file"
+
+          done
+
+
+      # ========================================================
+      # CAPACITOR
+      # ========================================================
+
+      - name: Sync Capacitor Android
+        run: |
+
+          npx cap sync android
+
+
+      - name: Verify Android Capacitor Project
+        run: |
+
+          test -d android
+          test -f android/gradlew
+
+          echo "✓ Android Capacitor project"
+
+
+      # ========================================================
+      # ANDROID BUILD
+      # ========================================================
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
+
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK Components
+
+      - name: Install Android SDK
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.10.2
 
-      # ====================================
-      # TEST 1: VERIFICA CLASSI STAMPA
-      # ====================================
-      - name: Verify Print Classes Structure
+      - name: Build Android
+        working-directory: android
         run: |
-          echo "=== TEST 1: Struttura Classi di Stampa ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          # Array di classi obbligatorie
-          CLASSES=(
-            "PrintJob"
-            "PrinterConfig"
-            "PrinterConnection"
-            "BluetoothPrinterConnection"
-            "NetworkPrinterConnection"
-            "UsbPrinterConnection"
-            "EscPosPrinter"
-            "PrintLogger"
-            "PrintQueue"
-            "PrinterManager"
-            "AndroidPrinterInterface"
-          )
-          
-          echo "Verifica classi..."
-          for class in "${CLASSES[@]}"; do
-            FILE="$PRINT_DIR/${class}.java"
-            if [ -f "$FILE" ]; then
-              echo "  ✓ $class.java trovato"
-              
-              # Verifica che abbia la classe dichiarata
-              if grep -q "public class $class\|public interface $class" "$FILE"; then
-                echo "    ✓ Dichiarazione class/interface trovata"
-              else
-                echo "    ✗ Dichiarazione class/interface mancante"
-                exit 1
-              fi
-            else
-              echo "  ✗ $class.java mancante"
-              exit 1
-            fi
-          done
-          
-          echo "✓ TEST 1 PASSATO: Tutte le classi presenti"
 
-      # ====================================
-      # TEST 2: VERIFICA INTERFACCE
-      # ====================================
-      - name: Verify Interfaces Implementation
-        run: |
-          echo "=== TEST 2: Implementazione Interfacce ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica PrinterConnection implementazioni..."
-          
-          # BluetoothPrinterConnection deve implementare PrinterConnection
-          grep -q "class BluetoothPrinterConnection implements PrinterConnection" "$PRINT_DIR/BluetoothPrinterConnection.java" && \
-            echo "  ✓ BluetoothPrinterConnection implements PrinterConnection" || \
-            (echo "  ✗ BluetoothPrinterConnection non implementa PrinterConnection" && exit 1)
-          
-          # NetworkPrinterConnection deve implementare PrinterConnection
-          grep -q "class NetworkPrinterConnection implements PrinterConnection" "$PRINT_DIR/NetworkPrinterConnection.java" && \
-            echo "  ✓ NetworkPrinterConnection implements PrinterConnection" || \
-            (echo "  ✗ NetworkPrinterConnection non implementa PrinterConnection" && exit 1)
-          
-          # UsbPrinterConnection deve implementare PrinterConnection
-          grep -q "class UsbPrinterConnection implements PrinterConnection" "$PRINT_DIR/UsbPrinterConnection.java" && \
-            echo "  ✓ UsbPrinterConnection implements PrinterConnection" || \
-            (echo "  ✗ UsbPrinterConnection non implementa PrinterConnection" && exit 1)
-          
-          echo "✓ TEST 2 PASSATO: Interfacce implementate correttamente"
-
-      # ====================================
-      # TEST 3: VERIFICA METODI PRINCIPALI
-      # ====================================
-      - name: Verify Required Methods
-        run: |
-          echo "=== TEST 3: Metodi Principali ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica metodi PrinterConnection interface..."
-          grep -q "void connect() throws IOException" "$PRINT_DIR/PrinterConnection.java" && echo "  ✓ connect() dichiarato" || exit 1
-          grep -q "void disconnect() throws IOException" "$PRINT_DIR/PrinterConnection.java" && echo "  ✓ disconnect() dichiarato" || exit 1
-          grep -q "boolean isConnected()" "$PRINT_DIR/PrinterConnection.java" && echo "  ✓ isConnected() dichiarato" || exit 1
-          grep -q "void write(byte\[\])" "$PRINT_DIR/PrinterConnection.java" && echo "  ✓ write(byte[]) dichiarato" || exit 1
-          grep -q "void write(String)" "$PRINT_DIR/PrinterConnection.java" && echo "  ✓ write(String) dichiarato" || exit 1
-          grep -q "boolean testConnection()" "$PRINT_DIR/PrinterConnection.java" && echo "  ✓ testConnection() dichiarato" || exit 1
-          
-          echo "Verifica metodi PrinterManager..."
-          grep -q "public PrinterConfig createPrinter" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ createPrinter() presente" || exit 1
-          grep -q "public void savePrinter" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ savePrinter() presente" || exit 1
-          grep -q "public List.*getAllPrinters" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ getAllPrinters() presente" || exit 1
-          grep -q "public void print(" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ print() presente" || exit 1
-          
-          echo "Verifica metodi AndroidPrinterInterface..."
-          grep -q "@JavascriptInterface.*getPrinters" "$PRINT_DIR/AndroidPrinterInterface.java" && echo "  ✓ getPrinters() @JavascriptInterface" || exit 1
-          grep -q "@JavascriptInterface.*addPrinter" "$PRINT_DIR/AndroidPrinterInterface.java" && echo "  ✓ addPrinter() @JavascriptInterface" || exit 1
-          grep -q "@JavascriptInterface.*deletePrinter" "$PRINT_DIR/AndroidPrinterInterface.java" && echo "  ✓ deletePrinter() @JavascriptInterface" || exit 1
-          grep -q "@JavascriptInterface.*print(" "$PRINT_DIR/AndroidPrinterInterface.java" && echo "  ✓ print() @JavascriptInterface" || exit 1
-          
-          echo "✓ TEST 3 PASSATO: Metodi principali verificati"
-
-      # ====================================
-      # TEST 4: VERIFICA IMPORT ANDROID
-      # ====================================
-      - name: Verify Android Imports
-        run: |
-          echo "=== TEST 4: Import Android API ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica Bluetooth imports..."
-          grep -q "import android.bluetooth" "$PRINT_DIR/BluetoothPrinterConnection.java" && echo "  ✓ Bluetooth imports presenti" || exit 1
-          grep -q "import android.content.Context" "$PRINT_DIR/BluetoothPrinterConnection.java" && echo "  ✓ Context import presente" || exit 1
-          
-          echo "Verifica Network imports..."
-          grep -q "import java.net.Socket" "$PRINT_DIR/NetworkPrinterConnection.java" && echo "  ✓ Socket import presente" || exit 1
-          grep -q "import java.net.InetSocketAddress" "$PRINT_DIR/NetworkPrinterConnection.java" && echo "  ✓ InetSocketAddress import presente" || exit 1
-          
-          echo "Verifica USB imports..."
-          grep -q "import android.hardware.usb" "$PRINT_DIR/UsbPrinterConnection.java" && echo "  ✓ USB hardware imports presenti" || exit 1
-          grep -q "import android.hardware.usb.UsbConstants" "$PRINT_DIR/UsbPrinterConnection.java" && echo "  ✓ UsbConstants import presente" || exit 1
-          
-          echo "Verifica SharedPreferences imports..."
-          grep -q "import android.content.SharedPreferences" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ SharedPreferences import presente" || exit 1
-          
-          echo "Verifica JavascriptInterface..."
-          grep -q "import android.webkit.JavascriptInterface" "$PRINT_DIR/AndroidPrinterInterface.java" && echo "  ✓ JavascriptInterface import presente" || exit 1
-          
-          echo "✓ TEST 4 PASSATO: Import Android verificati"
-
-      # ====================================
-      # TEST 5: VERIFICA COSTANTI
-      # ====================================
-      - name: Verify Constants
-        run: |
-          echo "=== TEST 5: Costanti e Configurazioni ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica costanti PrintQueue..."
-          grep -q "MAX_RETRY_COUNT" "$PRINT_DIR/PrintQueue.java" && echo "  ✓ MAX_RETRY_COUNT definito" || exit 1
-          grep -q "INITIAL_RETRY_DELAY_MS" "$PRINT_DIR/PrintQueue.java" && echo "  ✓ INITIAL_RETRY_DELAY_MS definito" || exit 1
-          grep -q "MAX_RETRY_DELAY_MS" "$PRINT_DIR/PrintQueue.java" && echo "  ✓ MAX_RETRY_DELAY_MS definito" || exit 1
-          
-          echo "Verifica costanti PrinterConfig..."
-          grep -q "enum State" "$PRINT_DIR/PrintJob.java" && echo "  ✓ Job state enum presente" || exit 1
-          
-          echo "Verifica SharedPreferences..."
-          grep -q "PREFS_NAME" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ PREFS_NAME definito" || exit 1
-          grep -q "PREF_PRINTER_PREFIX" "$PRINT_DIR/PrinterManager.java" && echo "  ✓ PREF_PRINTER_PREFIX definito" || exit 1
-          
-          echo "✓ TEST 5 PASSATO: Costanti verificate"
-
-      # ====================================
-      # TEST 6: VERIFICA LOGGING
-      # ====================================
-      - name: Verify Logging
-        run: |
-          echo "=== TEST 6: Sistema di Logging ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica PrintLogger..."
-          grep -q "class PrintLogger" "$PRINT_DIR/PrintLogger.java" && echo "  ✓ PrintLogger class presente" || exit 1
-          grep -q "public static.*d(" "$PRINT_DIR/PrintLogger.java" && echo "  ✓ Metodo debug() presente" || exit 1
-          grep -q "public static.*i(" "$PRINT_DIR/PrintLogger.java" && echo "  ✓ Metodo info() presente" || exit 1
-          grep -q "public static.*w(" "$PRINT_DIR/PrintLogger.java" && echo "  ✓ Metodo warn() presente" || exit 1
-          grep -q "public static.*e(" "$PRINT_DIR/PrintLogger.java" && echo "  ✓ Metodo error() presente" || exit 1
-          
-          echo "Verifica utilizzo logging..."
-          grep -q "PrintLogger.*\\.i(" "$PRINT_DIR/AndroidPrinterInterface.java" && echo "  ✓ AndroidPrinterInterface usa logging" || exit 1
-          grep -q "PrintLogger.*\\.d(" "$PRINT_DIR/BluetoothPrinterConnection.java" && echo "  ✓ BluetoothPrinterConnection usa logging" || exit 1
-          
-          echo "✓ TEST 6 PASSATO: Logging verificato"
-
-      # ====================================
-      # TEST 7: VERIFICA WEBAPP INTEGRATION
-      # ====================================
-      - name: Verify JavaScript Bridge
-        run: |
-          echo "=== TEST 7: Bridge JavaScript-Android ==="
-          
-          JS_FILE="app/src/main/assets/printers-ui.js"
-          
-          echo "Verifica funzioni di caricamento..."
-          grep -q "function loadPrintersFromAndroid()" "$JS_FILE" && echo "  ✓ loadPrintersFromAndroid() presente" || exit 1
-          grep -q "AndroidPrinter.getPrinters()" "$JS_FILE" && echo "  ✓ Chiamata getPrinters()" || exit 1
-          
-          echo "Verifica funzioni di aggiunta..."
-          grep -q "function.*AddPrinter" "$JS_FILE" && echo "  ✓ Funzioni add printer presenti" || exit 1
-          grep -q "AndroidPrinter.addPrinter" "$JS_FILE" && echo "  ✓ Chiamata addPrinter()" || exit 1
-          
-          echo "Verifica funzioni di stampa..."
-          grep -q "AndroidPrinter.print" "$JS_FILE" && echo "  ✓ Chiamata print()" || exit 1
-          grep -q "AndroidPrinter.testPrint" "$JS_FILE" && echo "  ✓ Chiamata testPrint()" || exit 1
-          
-          echo "Verifica gestione categorie..."
-          grep -q "AndroidPrinter.setPrinterForCategory" "$JS_FILE" && echo "  ✓ Gestione categorie presente" || exit 1
-          grep -q "AndroidPrinter.setCopiesForCategory" "$JS_FILE" && echo "  ✓ Gestione copie presente" || exit 1
-          
-          echo "✓ TEST 7 PASSATO: Bridge JavaScript verificato"
-
-      # ====================================
-      # TEST 8: COMPILAZIONE
-      # ====================================
-      - name: Compile Printer Classes
-        run: |
-          echo "=== TEST 8: Compilazione Classi Stampa ==="
-          
           chmod +x gradlew
-          ./gradlew compileDebugJava -x lint || (echo "✗ Compilazione fallita" && exit 1)
-          
-          echo "✓ TEST 8 PASSATO: Compilazione completata"
 
-      # ====================================
-      # TEST 9: VERIFICA CONFIGURAZIONE ESADECIMALE USB
-      # ====================================
-      - name: Verify USB Config Parsing
-        run: |
-          echo "=== TEST 9: Configurazione USB VID/PID ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica parsing esadecimale..."
-          grep -q "Long.parseLong.*16" "$PRINT_DIR/AndroidPrinterInterface.java" && \
-            echo "  ✓ Parsing esadecimale VID/PID implementato" || \
-            (echo "  ✗ Parsing esadecimale mancante" && exit 1)
-          
-          echo "Verifica formato VID/PID in UsbPrinterConnection..."
-          grep -q "usbVendorId" "$PRINT_DIR/UsbPrinterConnection.java" && echo "  ✓ VID utilizzato" || exit 1
-          grep -q "usbProductId" "$PRINT_DIR/UsbPrinterConnection.java" && echo "  ✓ PID utilizzato" || exit 1
-          
-          echo "✓ TEST 9 PASSATO: Configurazione USB verificata"
+          ./gradlew assembleDebug
 
-      # ====================================
-      # TEST 10: VERIFICA VALIDAZIONE
-      # ====================================
-      - name: Verify Validation
-        run: |
-          echo "=== TEST 10: Validazione Stampante ==="
-          
-          PRINT_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "Verifica metodo isValid()..."
-          grep -q "public boolean isValid()" "$PRINT_DIR/PrinterConfig.java" && echo "  ✓ isValid() presente in PrinterConfig" || exit 1
-          
-          grep -q "bluetoothAddress\|networkAddress\|usbVendorId" "$PRINT_DIR/PrinterConfig.java" && \
-            echo "  ✓ Campi specifici per tipo validati" || exit 1
-          
-          echo "Verifica uso validazione in AndroidPrinterInterface..."
-          grep -q "printer.isValid()" "$PRINT_DIR/AndroidPrinterInterface.java" && \
-            echo "  ✓ isValid() chiamato prima di salvare" || exit 1
-          
-          echo "✓ TEST 10 PASSATO: Validazione verificata"
 
-      # ====================================
-      # REPORT FINALE
-      # ====================================
-      - name: Test Summary
+      # ========================================================
+      # REPORT
+      # ========================================================
+
+      - name: Printer Test Summary
         run: |
+
           echo ""
           echo "============================================"
-          echo "✓ PRINTER SYSTEM TESTS - TUTTI PASSATI"
+          echo "PRINTER TESTS"
           echo "============================================"
           echo ""
-          echo "✓ TEST 1:  Struttura classi verificata"
-          echo "✓ TEST 2:  Interfacce implementate correttamente"
-          echo "✓ TEST 3:  Metodi principali presenti"
-          echo "✓ TEST 4:  Import Android API corretti"
-          echo "✓ TEST 5:  Costanti definite"
-          echo "✓ TEST 6:  Sistema logging funzionante"
-          echo "✓ TEST 7:  Bridge JavaScript-Android verificato"
-          echo "✓ TEST 8:  Compilazione Java riuscita"
-          echo "✓ TEST 9:  Configurazione USB (VID/PID) verificata"
-          echo "✓ TEST 10: Validazione stampante funzionante"
+          echo "✓ Web printer layer analizzato"
+          echo "✓ JavaScript verificato"
+          echo "✓ Capacitor sincronizzato"
+          echo "✓ Android compilato"
           echo ""
-          echo "La qualità del codice di stampa è: ✅ ECCELLENTE"
-          echo ""
-
-      - name: Upload Test Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: printer-test-logs
-          path: build/outputs/**/*
-          retention-days: 7
