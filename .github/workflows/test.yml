@@ -1,354 +1,309 @@
-name: Test Application
+name: Application Tests
 
 on:
   workflow_dispatch:
+
   push:
     branches:
       - main
       - master
       - develop
+
   pull_request:
     branches:
       - main
       - master
 
 jobs:
-  test:
+
+  # ============================================================
+  # WEB + CAPACITOR COMMON TESTS
+  # ============================================================
+
+  web-tests:
+    name: Webapp & Capacitor Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --------------------------------------------------------
+      # PROJECT STRUCTURE
+      # --------------------------------------------------------
+
+      - name: Verify Project Structure
+        run: |
+          echo "=== PROJECT STRUCTURE ==="
+
+          test -f package.json
+          echo "✓ package.json"
+
+          test -f package-lock.json
+          echo "✓ package-lock.json"
+
+          test -f capacitor.config.ts
+          echo "✓ capacitor.config.ts"
+
+          test -d www
+          echo "✓ www/"
+
+          test -f www/index.html
+          echo "✓ www/index.html"
+
+          echo ""
+          echo "✓ Struttura progetto verificata"
+
+      # --------------------------------------------------------
+      # PACKAGE
+      # --------------------------------------------------------
+
+      - name: Verify Capacitor Dependencies
+        run: |
+          echo "=== CAPACITOR DEPENDENCIES ==="
+
+          npm list @capacitor/core
+          npm list @capacitor/cli
+          npm list @capacitor/android
+          npm list @capacitor/ios
+
+          echo "✓ Dipendenze Capacitor verificate"
+
+      # --------------------------------------------------------
+      # CAPACITOR CONFIG
+      # --------------------------------------------------------
+
+      - name: Verify Capacitor Configuration
+        run: |
+          echo "=== CAPACITOR CONFIG ==="
+
+          grep -q "appId" capacitor.config.ts
+          grep -q "appName" capacitor.config.ts
+          grep -q "webDir" capacitor.config.ts
+          grep -q "'www'" capacitor.config.ts || \
+          grep -q '"www"' capacitor.config.ts
+
+          echo "✓ capacitor.config.ts verificato"
+
+      # --------------------------------------------------------
+      # WEBAPP SYNTAX
+      # --------------------------------------------------------
+
+      - name: Check JavaScript
+        run: |
+          echo "=== JAVASCRIPT CHECK ==="
+
+          JS_FILES=$(find www -name "*.js")
+
+          if [ -z "$JS_FILES" ]; then
+            echo "Nessun file JavaScript trovato"
+            exit 0
+          fi
+
+          for file in $JS_FILES; do
+            echo "Controllo $file"
+
+            node --check "$file"
+
+            echo "✓ $file"
+          done
+
+      # --------------------------------------------------------
+      # HTML
+      # --------------------------------------------------------
+
+      - name: Verify HTML
+        run: |
+          echo "=== HTML CHECK ==="
+
+          HTML="www/index.html"
+
+          grep -qi "<html" "$HTML"
+          grep -qi "<head" "$HTML"
+          grep -qi "<body" "$HTML"
+
+          echo "✓ HTML valido"
+
+      # --------------------------------------------------------
+      # CAPACITOR ANDROID SYNC
+      # --------------------------------------------------------
+
+      - name: Sync Android
+        run: |
+          npx cap sync android
+
+      - name: Verify Android Project
+        run: |
+          test -d android
+          test -f android/gradlew
+          test -f android/settings.gradle
+          test -d android/app
+
+          echo "✓ Progetto Android Capacitor verificato"
+
+      # --------------------------------------------------------
+      # CAPACITOR IOS SYNC
+      # --------------------------------------------------------
+
+      - name: Sync iOS
+        run: |
+          npx cap sync ios
+
+      - name: Verify iOS Project
+        run: |
+          test -d ios
+          test -d ios/App
+
+          echo "✓ Progetto iOS Capacitor verificato"
+
+      # --------------------------------------------------------
+      # UPLOAD
+      # --------------------------------------------------------
+
+      - name: Upload Web Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-capacitor-test-results
+          path: |
+            capacitor.config.ts
+            package.json
+            package-lock.json
+          retention-days: 7
+
+
+  # ============================================================
+  # ANDROID BUILD
+  # ============================================================
+
+  android:
+    name: Android Build Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK Components
+      - name: Install Android SDK
         run: |
-          sdkmanager "platforms;android-35" \
-                      "build-tools;35.0.0" \
-                      "system-images;android-35;google_apis;x86_64" \
-                      "emulator"
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Sync Capacitor
+        run: |
+          npx cap sync android
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.10.2
-
-      # ====================================
-      # FASE 1: VERIFICA STRUTTURA PROGETTO
-      # ====================================
-      - name: Verify Project Structure
-        run: |
-          echo "=== Verifica Struttura Progetto ==="
-          
-          # Verifica file essenziali
-          test -f "build.gradle" && echo "✓ build.gradle trovato" || (echo "✗ build.gradle mancante" && exit 1)
-          test -f "app/build.gradle" && echo "✓ app/build.gradle trovato" || (echo "✗ app/build.gradle mancante" && exit 1)
-          test -f "app/src/main/AndroidManifest.xml" && echo "✓ AndroidManifest.xml trovato" || (echo "✗ AndroidManifest.xml mancante" && exit 1)
-          test -f "app/src/main/java/it/talloncinicassa/app/MainActivity.java" && echo "✓ MainActivity.java trovato" || (echo "✗ MainActivity.java mancante" && exit 1)
-          
-          # Verifica package di stampa
-          test -d "app/src/main/java/it/talloncinicassa/app/print" && echo "✓ Package print trovato" || (echo "✗ Package print mancante" && exit 1)
-          
-          # Verifica file di stampa
-          for file in PrintJob PrinterConfig PrinterConnection BluetoothPrinterConnection NetworkPrinterConnection UsbPrinterConnection EscPosPrinter PrintLogger PrintQueue PrinterManager AndroidPrinterInterface; do
-            test -f "app/src/main/java/it/talloncinicassa/app/print/${file}.java" && echo "✓ ${file}.java trovato" || (echo "✗ ${file}.java mancante" && exit 1)
-          done
-          
-          # Verifica asset webapp
-          test -f "app/src/main/assets/talloncini-cassa-5.html" && echo "✓ talloncini-cassa-5.html trovato" || (echo "✗ talloncini-cassa-5.html mancante" && exit 1)
-          test -f "app/src/main/assets/printers-ui.js" && echo "✓ printers-ui.js trovato" || (echo "✗ printers-ui.js mancante" && exit 1)
-          
-          echo "✓ Struttura progetto verificata"
-
-      # ====================================
-      # FASE 2: VERIFICA MANIFESTO ANDROID
-      # ====================================
-      - name: Verify AndroidManifest.xml
-        run: |
-          echo "=== Verifica AndroidManifest.xml ==="
-          
-          MANIFEST="app/src/main/AndroidManifest.xml"
-          
-          # Verifica permissions
-          grep -q "INTERNET" "$MANIFEST" && echo "✓ INTERNET permission trovata" || (echo "✗ INTERNET permission mancante" && exit 1)
-          grep -q "BLUETOOTH" "$MANIFEST" && echo "✓ BLUETOOTH permission trovata" || (echo "✗ BLUETOOTH permission mancante" && exit 1)
-          grep -q "BLUETOOTH_ADMIN" "$MANIFEST" && echo "✓ BLUETOOTH_ADMIN permission trovata" || (echo "✗ BLUETOOTH_ADMIN permission mancante" && exit 1)
-          grep -q "USB_PERMISSION" "$MANIFEST" && echo "✓ USB_PERMISSION trovata" || (echo "✗ USB_PERMISSION mancante" && exit 1)
-          
-          # Verifica feature USB
-          grep -q "android.hardware.usb.host" "$MANIFEST" && echo "✓ USB host feature trovata" || (echo "✗ USB host feature mancante" && exit 1)
-          
-          echo "✓ AndroidManifest.xml verificato"
-
-      # ====================================
-      # FASE 3: VERIFICA IMPORT BRIDGE
-      # ====================================
-      - name: Verify Bridge Registration
-        run: |
-          echo "=== Verifica Bridge Android-JavaScript ==="
-          
-          MAIN_ACTIVITY="app/src/main/java/it/talloncinicassa/app/MainActivity.java"
-          
-          # Verifica import AndroidPrinterInterface
-          grep -q "import it.talloncinicassa.app.print.AndroidPrinterInterface" "$MAIN_ACTIVITY" && echo "✓ Import AndroidPrinterInterface trovato" || (echo "✗ Import AndroidPrinterInterface mancante" && exit 1)
-          
-          # Verifica registrazione bridge
-          grep -q "new AndroidPrinterInterface" "$MAIN_ACTIVITY" && echo "✓ Istanza AndroidPrinterInterface trovata" || (echo "✗ Istanza AndroidPrinterInterface mancante" && exit 1)
-          grep -q "addJavascriptInterface.*AndroidPrinter" "$MAIN_ACTIVITY" && echo "✓ Bridge registrato nel WebView" || (echo "✗ Bridge non registrato" && exit 1)
-          
-          echo "✓ Bridge verificato"
-
-      # ====================================
-      # FASE 4: VERIFICA WEBAPP
-      # ====================================
-      - name: Verify Webapp Integration
-        run: |
-          echo "=== Verifica Integrazione Webapp ==="
-          
-          HTML="app/src/main/assets/talloncini-cassa-5.html"
-          
-          # Verifica tab stampanti
-          grep -q "🖨️ Stampanti" "$HTML" && echo "✓ Tab Stampanti trovato" || (echo "✗ Tab Stampanti mancante" && exit 1)
-          grep -q "data-tab=\"printersTab\"" "$HTML" && echo "✓ printersTab pane trovato" || (echo "✗ printersTab pane mancante" && exit 1)
-          
-          # Verifica script
-          grep -q "printers-ui.js" "$HTML" && echo "✓ printers-ui.js incluso" || (echo "✗ printers-ui.js non incluso" && exit 1)
-          grep -q "PrintersModule.init" "$HTML" && echo "✓ Inizializzazione PrintersModule trovata" || (echo "✗ Inizializzazione mancante" && exit 1)
-          
-          echo "✓ Webapp verificata"
-
-      # ====================================
-      # FASE 5: LINTING JAVASCRIPT
-      # ====================================
-      - name: JavaScript Linting
-        run: |
-          echo "=== Linting JavaScript ==="
-          
-          JS_FILE="app/src/main/assets/printers-ui.js"
-          
-          # Verifica sintassi JavaScript di base
-          if command -v node &> /dev/null; then
-            node -c "$JS_FILE" && echo "✓ Sintassi JavaScript valida" || echo "⚠ Errori di sintassi rilevati"
-          else
-            echo "⚠ Node.js non disponibile, skip linting"
-          fi
-          
-          # Verifica funzioni principali
-          grep -q "window.PrintersModule" "$JS_FILE" && echo "✓ PrintersModule namespace trovato" || (echo "✗ PrintersModule mancante" && exit 1)
-          grep -q "function initPrinters" "$JS_FILE" && echo "✓ initPrinters() trovato" || (echo "✗ initPrinters() mancante" && exit 1)
-          grep -q "function loadPrintersFromAndroid" "$JS_FILE" && echo "✓ loadPrintersFromAndroid() trovato" || (echo "✗ loadPrintersFromAndroid() mancante" && exit 1)
-          grep -q "confirmAddPrinter" "$JS_FILE" && echo "✓ confirmAddPrinter() trovato" || (echo "✗ confirmAddPrinter() mancante" && exit 1)
-          
-          echo "✓ JavaScript verificato"
-
-      # ====================================
-      # FASE 6: COMPILAZIONE JAVA
-      # ====================================
-      - name: Compile Java
+      - name: Build Android
+        working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew compileDebugJava --stacktrace || (echo "✗ Compilazione Java fallita" && exit 1)
-          echo "✓ Compilazione Java riuscita"
-
-      # ====================================
-      # FASE 7: LINTING JAVA (FindBugs, etc)
-      # ====================================
-      - name: Java Lint & Static Analysis
-        run: |
-          echo "=== Analisi Statica Java ==="
-          
-          # Verifica che non ci siano problemi comuni
-          JAVA_DIR="app/src/main/java/it/talloncinicassa/app/print"
-          
-          echo "✓ Controllo imports..."
-          for file in "$JAVA_DIR"/*.java; do
-            # Verifica che non ci siano import non usati (semplice check)
-            if grep -q "import java\|import android" "$file"; then
-              echo "  ✓ $(basename $file) ha imports"
-            fi
-          done
-          
-          echo "✓ Controllo package declarations..."
-          for file in "$JAVA_DIR"/*.java; do
-            if grep -q "^package it.talloncinicassa.app.print" "$file"; then
-              echo "  ✓ $(basename $file) ha package corretto"
-            else
-              echo "  ✗ $(basename $file) package non valido"
-              exit 1
-            fi
-          done
-
-      # ====================================
-      # FASE 8: BUILD COMPLETO
-      # ====================================
-      - name: Build APK (Full)
-        run: |
           ./gradlew assembleDebug --stacktrace
-          test -f "app/build/outputs/apk/debug/app-debug.apk" && echo "✓ APK generato con successo" || (echo "✗ APK non generato" && exit 1)
 
-      # ====================================
-      # FASE 9: VERIFICA APK
-      # ====================================
       - name: Verify APK
         run: |
-          echo "=== Verifica APK ==="
-          
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          
-          # Verifica che il file esista e abbia una dimensione ragionevole
-          if [ -f "$APK" ]; then
-            SIZE=$(stat -f%z "$APK" 2>/dev/null || stat -c%s "$APK" 2>/dev/null)
-            echo "✓ APK size: $(numfmt --to=iec-i --suffix=B $SIZE 2>/dev/null || echo "$SIZE bytes")"
-            
-            # Verifica che contiene i file essenziali
-            unzip -t "$APK" | grep -q "AndroidManifest.xml" && echo "✓ AndroidManifest.xml presente in APK" || echo "✗ AndroidManifest.xml mancante in APK"
-            unzip -t "$APK" | grep -q "classes.dex" && echo "✓ classes.dex presente in APK" || echo "✗ classes.dex mancante in APK"
-            unzip -t "$APK" | grep -q "talloncini-cassa-5.html" && echo "✓ HTML webapp presente in APK" || echo "✗ HTML webapp mancante in APK"
-            unzip -t "$APK" | grep -q "printers-ui.js" && echo "✓ printers-ui.js presente in APK" || echo "✗ printers-ui.js mancante in APK"
-          else
-            echo "✗ APK non trovato"
-            exit 1
-          fi
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
 
-      # ====================================
-      # FASE 10: UNIT TESTS (se presenti)
-      # ====================================
-      - name: Run Unit Tests
-        run: |
-          echo "=== Esecuzione Unit Tests ==="
-          
-          if ./gradlew testDebug --stacktrace 2>&1 | grep -q "No tests found"; then
-            echo "⚠ Nessun unit test trovato (opzionale)"
-          else
-            echo "✓ Unit tests eseguiti"
-          fi
-        continue-on-error: true
+          test -f "$APK"
 
-      # ====================================
-      # FASE 11: REPORT FINALE
-      # ====================================
-      - name: Build Summary
-        run: |
-          echo ""
-          echo "============================================"
-          echo "✓ TEST SUITE COMPLETATO CON SUCCESSO"
-          echo "============================================"
-          echo ""
-          echo "Risultati:"
-          echo "  ✓ Struttura progetto verificata"
-          echo "  ✓ AndroidManifest.xml verificato"
-          echo "  ✓ Bridge Android-JavaScript registrato"
-          echo "  ✓ Integrazione webapp verificata"
-          echo "  ✓ JavaScript linting completato"
-          echo "  ✓ Compilazione Java riuscita"
-          echo "  ✓ Analisi statica completata"
-          echo "  ✓ APK generato e verificato"
-          echo ""
-          echo "Artifacts disponibili:"
-          echo "  📦 app/build/outputs/apk/debug/app-debug.apk"
-          echo ""
+          echo "✓ APK generato"
 
-      # ====================================
-      # UPLOAD ARTIFACTS
-      # ====================================
-      - name: Upload Test Results
-        if: always()
+          unzip -t "$APK" >/dev/null
+
+          echo "✓ APK integro"
+
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: |
-            app/build/outputs/**/*
-            build/reports/**/*
-          retention-days: 7
+          name: android-test-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
 
-  # ====================================
-  # TEST SU EMULATOR (OPZIONALE)
-  # ====================================
-  emulator-test:
+
+  # ============================================================
+  # IOS BUILD
+  # ============================================================
+
+  ios:
+    name: iOS Build Test
     runs-on: macos-latest
-    timeout-minutes: 45
-    
+    timeout-minutes: 30
+
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          node-version: '22'
+          cache: npm
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.10.2
-
-      - name: Build APK for Testing
+      - name: Sync Capacitor
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          npx cap sync ios
 
-      - name: Run Emulator Tests
-        uses: ReactiveCircus/android-emulator-runner@v2
+      - name: Install CocoaPods
+        working-directory: ios/App
+        run: |
+          pod install
+
+      - name: Build iOS
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify iOS Build
+        run: |
+          test -d ios/App/build
+
+          echo "✓ Build iOS completata"
+
+      - name: Upload iOS Build
+        uses: actions/upload-artifact@v4
         with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            echo "=== Teste sull'Emulator ==="
-            
-            # Installa APK
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            
-            # Attendi che l'app sia pronta
-            sleep 5
-            
-            # Verifica che l'app sia installata
-            adb shell pm list packages | grep "it.talloncinicassa.app" && echo "✓ App installata" || (echo "✗ App non installata" && exit 1)
-            
-            # Avvia l'app
-            adb shell am start -n it.talloncinicassa.app/.MainActivity
-            sleep 3
-            
-            # Verifica che non sia crashata
-            adb logcat -d | grep -i "FATAL\|CRASH" && echo "✗ Crash rilevato" || echo "✓ App avviata senza crash"
-            
-            # Verifica che il bridge sia caricato
-            adb logcat -d | grep "AndroidPrinterInterface\|CassaStampa" && echo "✓ Bridge caricato" || echo "⚠ Bridge non trovato nei log"
-            
-            echo "✓ Test emulator completati"
-
-  # ====================================
-  # NOTIFICA RISULTATI
-  # ====================================
-  notify:
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: always()
-    
-    steps:
-      - name: Test Status
-        run: |
-          if [ "${{ needs.test.result }}" == "success" ]; then
-            echo "✅ Tutti i test sono passati!"
-            echo "L'applicazione è pronta per il deployment."
-          else
-            echo "❌ Alcuni test hanno fallito."
-            echo "Verifica i log per i dettagli."
-            exit 1
-          fi
+          name: ios-test-build
+          path: ios/App/build
