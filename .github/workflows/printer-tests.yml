@@ -2,7 +2,6 @@ name: Printer System Tests
 
 on:
   workflow_dispatch:
-
   push:
     branches:
       - main
@@ -16,26 +15,15 @@ on:
       - 'capacitor.config.ts'
       - '.github/workflows/printer-tests.yml'
 
-
 jobs:
-
   printer-tests:
-
     name: Printer Architecture Tests
-
     runs-on: ubuntu-latest
-
     timeout-minutes: 25
 
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
-
-
-      # ========================================================
-      # NODE
-      # ========================================================
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -43,100 +31,46 @@ jobs:
           node-version: '22'
           cache: npm
 
-
       - name: Install dependencies
         run: npm ci
 
-
-      # ========================================================
-      # PROJECT STRUCTURE
-      # ========================================================
+      - name: Verify thermal printer dependency
+        run: |
+          node -e "const p=require('./package.json'); if(!p.dependencies['@delicity/capacitor-thermal-printer']) process.exit(1); console.log('✓ @delicity/capacitor-thermal-printer presente')"
+          npm list @delicity/capacitor-thermal-printer
 
       - name: Verify Printer Architecture
         run: |
-
-          echo "=== PRINTER ARCHITECTURE ==="
-
           test -d www
+          test -f www/printers-ui.js
+          node --check www/printers-ui.js
+          echo "✓ www/printers-ui.js valido"
 
-          echo "✓ Webapp presente"
-
-          # Cerca i servizi printer senza imporre un nome preciso
-          PRINTER_FILES=$(find www -type f \
-            \( -iname "*printer*" -o -iname "*escpos*" \))
-
-          if [ -z "$PRINTER_FILES" ]; then
-            echo "⚠ Nessun modulo printer trovato"
-            echo "Questo test verrà reso obbligatorio quando il nuovo PrinterService sarà implementato."
-          else
-            echo "Moduli printer trovati:"
-            echo "$PRINTER_FILES"
-          fi
-
-
-      # ========================================================
-      # ESC/POS
-      # ========================================================
-
-      - name: Verify ESC/POS Layer
+      - name: Verify Capacitor printer bridge
         run: |
+          grep -q "registerPlugin('ThermalPrinter')" www/printers-ui.js
+          grep -q "discoverPrinters" www/printers-ui.js
+          grep -q "printText" www/printers-ui.js
+          grep -q "connectPrinter" www/printers-ui.js
+          echo "✓ API ThermalPrinter collegata"
 
-          echo "=== ESC/POS ==="
-
-          ESC_FILES=$(find . -type f \
-            \( -iname "*escpos*" -o -iname "*esc-pos*" \) \
-            -not -path "./node_modules/*")
-
-          if [ -z "$ESC_FILES" ]; then
-            echo "⚠ Modulo ESC/POS non ancora trovato"
-          else
-            echo "$ESC_FILES"
-            echo "✓ Modulo ESC/POS individuato"
-          fi
-
-
-      # ========================================================
-      # JAVASCRIPT SYNTAX
-      # ========================================================
-
-      - name: Test Printer JavaScript
+      - name: Verify JavaScript syntax
         run: |
-
-          echo "=== PRINTER JAVASCRIPT ==="
-
-          JS_FILES=$(find www -type f -name "*.js")
-
-          for file in $JS_FILES; do
-
+          find www -type f -name "*.js" -print0 | while IFS= read -r -d '' file; do
             node --check "$file"
-
             echo "✓ $file"
-
           done
 
-
-      # ========================================================
-      # CAPACITOR
-      # ========================================================
-
       - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Verify Android Capacitor project
         run: |
-
-          npx cap sync android
-
-
-      - name: Verify Android Capacitor Project
-        run: |
-
           test -d android
           test -f android/gradlew
-
-          echo "✓ Android Capacitor project"
-
-
-      # ========================================================
-      # ANDROID BUILD
-      # ========================================================
+          grep -q "minSdkVersion = 26" android/variables.gradle
+          grep -q "compileSdkVersion = 36" android/variables.gradle
+          echo "✓ Android Capacitor project e SDK corretti"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -144,46 +78,30 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-
-      - name: Install Android SDK
+      - name: Install Android SDK 36
         run: |
-
-          sdkmanager \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-
       - name: Build Android
         working-directory: android
         run: |
-
           chmod +x gradlew
-
           ./gradlew assembleDebug
-
-
-      # ========================================================
-      # REPORT
-      # ========================================================
 
       - name: Printer Test Summary
         run: |
-
-          echo ""
           echo "============================================"
           echo "PRINTER TESTS"
           echo "============================================"
-          echo ""
-          echo "✓ Web printer layer analizzato"
+          echo "✓ Plugin npm presente"
+          echo "✓ Bridge ThermalPrinter presente"
           echo "✓ JavaScript verificato"
           echo "✓ Capacitor sincronizzato"
-          echo "✓ Android compilato"
-          echo ""
+          echo "✓ Android SDK 36 + JDK 21"
+          echo "✓ APK compilato"
