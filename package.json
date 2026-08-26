@@ -4,7 +4,9 @@
   "description": "Questo progetto trasforma `talloncini-cassa-5.html` in una vera app Android tramite WebView.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare:web": "node scripts/copy-capacitor-runtime.mjs",
+    "postinstall": "npm run prepare:web"
   },
   "repository": {
     "type": "git",
