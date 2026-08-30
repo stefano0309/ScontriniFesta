@@ -1,43 +1,44 @@
-// CashTab.jsx
 import { useState } from 'react';
+import { useCassa } from '../../store/CassaContext';
 
-function CashTab({ isActive, cashFloatData, onSaveCashFloat, onAddCash }) {
-    const [cashFloat, setCashFloat] = useState('');
+function CashTab({ isActive }) {
+    const { cashFloat, cashAdditions, cashAdditionsTotal, settings, saveCashFloat, addCashAddition, removeCashAddition } = useCassa();
+
+    const [cashFloatAmount, setCashFloatAmount] = useState('');
     const [cashFloatNote, setCashFloatNote] = useState('');
     const [cashFloatStatus, setCashFloatStatus] = useState('');
-    
+
     const [addAmount, setAddAmount] = useState('');
     const [addNote, setAddNote] = useState('');
     const [addStatus, setAddStatus] = useState('');
 
-    const handleSaveFloat = () => {
-        if (!cashFloat || isNaN(cashFloat) || Number(cashFloat) < 0) {
+    const handleSaveFloat = async () => {
+        if (!cashFloatAmount || isNaN(cashFloatAmount) || Number(cashFloatAmount) < 0) {
             setCashFloatStatus('Inserisci un importo valido.');
             return;
         }
-        if (onSaveCashFloat) {
-            onSaveCashFloat({ amount: parseFloat(cashFloat), note: cashFloatNote });
-        }
-        setCashFloatStatus('Fondo cassa salvato con successo!');
-        setCashFloat('');
+        const saved = await saveCashFloat({ amount: parseFloat(cashFloatAmount), note: cashFloatNote });
+        setCashFloatStatus(saved ? 'Fondo cassa salvato.' : 'Fondo cassa salvato solo localmente (Firebase non disponibile).');
+        setCashFloatAmount('');
         setCashFloatNote('');
+        setTimeout(() => setCashFloatStatus(''), 3000);
     };
 
-    const handleAddCash = () => {
+    const handleAddCash = async () => {
         if (!addAmount || isNaN(addAmount) || Number(addAmount) <= 0) {
-            setAddStatus('Inserisci un importo valido.');
+            setAddStatus('Inserisci un importo maggiore di zero.');
             return;
         }
-        if (onAddCash) {
-            onAddCash({
-                amount: parseFloat(addAmount),
-                note: addNote,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            });
-        }
-        setAddStatus('Contante aggiunto con successo!');
+        await addCashAddition(parseFloat(addAmount), addNote);
+        setAddStatus(`Aggiunti ${settings.currency} ${parseFloat(addAmount).toFixed(2)} al fondo cassa.`);
         setAddAmount('');
         setAddNote('');
+        setTimeout(() => setAddStatus(''), 2500);
+    };
+
+    const handleRemove = async (entry) => {
+        if (!window.confirm(`Eliminare l'aggiunta di ${settings.currency} ${Number(entry.amount || 0).toFixed(2)}?`)) return;
+        await removeCashAddition(entry);
     };
 
     return (
@@ -54,8 +55,8 @@ function CashTab({ isActive, cashFloatData, onSaveCashFloat, onAddCash }) {
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    value={cashFloat}
-                    onChange={(e) => setCashFloat(e.target.value)}
+                    value={cashFloatAmount}
+                    onChange={(e) => setCashFloatAmount(e.target.value)}
                 />
                 <label htmlFor="setCashFloatNote">Nota (facoltativa)</label>
                 <input
@@ -65,9 +66,9 @@ function CashTab({ isActive, cashFloatData, onSaveCashFloat, onAddCash }) {
                     value={cashFloatNote}
                     onChange={(e) => setCashFloatNote(e.target.value)}
                 />
-                <button 
-                    className="btn-amber btn-block" 
-                    id="saveCashFloatBtn" 
+                <button
+                    className="btn-amber btn-block"
+                    id="saveCashFloatBtn"
                     style={{ marginTop: '10px' }}
                     onClick={handleSaveFloat}
                 >
@@ -75,13 +76,13 @@ function CashTab({ isActive, cashFloatData, onSaveCashFloat, onAddCash }) {
                 </button>
                 <div className="status-line" id="cashFloatStatus">{cashFloatStatus}</div>
                 <div id="cashFloatCurrent" className="info-box" style={{ marginTop: '16px' }}>
-                    {cashFloatData?.currentFloat ? (
+                    {cashFloat.setAt ? (
                         <>
-                            <strong>Fondo cassa attuale:</strong> € {cashFloatData.currentFloat.toFixed(2)}
-                            {cashFloatData.note && <div><small>Nota: {cashFloatData.note}</small></div>}
+                            Fondo cassa attuale: <b>{settings.currency} {Number(cashFloat.amount || 0).toFixed(2)}</b> · impostato il {new Date(cashFloat.setAt).toLocaleString('it-IT')}
+                            {cashFloat.note && <div><small>Nota: {cashFloat.note}</small></div>}
                         </>
                     ) : (
-                        'Nessun fondo cassa attualmente impostato.'
+                        'Nessun fondo cassa impostato per questa serata.'
                     )}
                 </div>
             </div>
@@ -125,16 +126,28 @@ function CashTab({ isActive, cashFloatData, onSaveCashFloat, onAddCash }) {
                 </div>
                 <div className="status-line" id="cashAdditionsStatus">{addStatus}</div>
                 <div id="cashAdditionsList" style={{ marginTop: '14px' }}>
-                    {cashFloatData?.additions && cashFloatData.additions.length > 0 ? (
-                        <ul>
-                            {cashFloatData.additions.map((item, index) => (
-                                <li key={index}>
-                                    [{item.time}] +€{item.amount.toFixed(2)} {item.note && `(${item.note})`}
-                                </li>
-                            ))}
-                        </ul>
+                    {cashAdditions.length === 0 ? (
+                        <div className="empty-hint">Nessuna aggiunta registrata per questa serata.</div>
                     ) : (
-                        <div className="empty-hint">Nessuna aggiunta registrata.</div>
+                        <>
+                            <div className="info-box" style={{ marginBottom: '10px' }}>
+                                Totale aggiunte: <b>{settings.currency} {cashAdditionsTotal().toFixed(2)}</b> ({cashAdditions.length})
+                            </div>
+                            {cashAdditions.map((a, i) => {
+                                const when = new Date(a.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                                return (
+                                    <div className="dish-row" key={a._fbKey || i}>
+                                        <div>
+                                            {settings.currency} {Number(a.amount || 0).toFixed(2)} <span className="dp">{when}{a.deviceTag ? ' · ' + a.deviceTag : ''}</span>
+                                            {a.note && <><br /><span className="dp">{a.note}</span></>}
+                                        </div>
+                                        <button type="button" className="btn-red" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={() => handleRemove(a)}>
+                                            Elimina
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </>
                     )}
                 </div>
             </div>

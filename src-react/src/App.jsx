@@ -2,40 +2,76 @@ import { useState } from 'react';
 import CashierView from './component/view/cashierView';
 import AdminLogin from './component/modal/adminLogin';
 import AdminView from './component/view/adminView';
+import SaleEditorModal from './component/modal/saleEditor';
+import { CassaProvider, useCassa } from './store/CassaContext.jsx';
+// Importa ed esegue il file di inizializzazione Firebase
+import './module/firebaseInit.js';
 
-function App() {
-  // Stato per la schermata principale corrente ('cashier' o 'admin')
+function Shell() {
   const [currentView, setCurrentView] = useState('cashier');
-  
-  // Stato per la modale di login
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const { firebaseReady, flashState, dataWarning, dismissWarning, adminLoggedIn, logout } = useCassa();
 
-  // Gestione del login avvenuto con successo
   const handleLoginSuccess = () => {
-    setShowAdminLogin(false); // Chiude il form di login
-    setCurrentView('admin');   // Passa alla vista Admin
+    setShowAdminLogin(false);
+    setCurrentView('admin');
+  };
+
+  const handleBackToCashier = () => {
+    logout();
+    setCurrentView('cashier');
   };
 
   return (
     <>
-      {/* Mostra CashierView se siamo nella cassa */}
+      {!firebaseReady && (
+        <div style={{ background: '#ff9800', color: '#fff', textAlign: 'center', padding: '8px' }}>
+          Connessione a Firebase in corso... L'app funziona in modalità offline.
+        </div>
+      )}
+
       {currentView === 'cashier' && (
         <CashierView onOpenAdmin={() => setShowAdminLogin(true)} />
       )}
 
-      {/* Mostra AdminView se abbiamo fatto l'accesso */}
-      {currentView === 'admin' && (
-        <AdminView onBack={() => setCurrentView('cashier')} />
+      {currentView === 'admin' && adminLoggedIn && (
+        <AdminView onBack={handleBackToCashier} />
       )}
 
-      {/* Form di Login in overlay */}
       {showAdminLogin && (
-        <AdminLogin 
-          onClose={() => setShowAdminLogin(false)} 
-          onLoginSuccess={handleLoginSuccess}
-        />
+        <AdminLogin onClose={() => setShowAdminLogin(false)} onLoginSuccess={handleLoginSuccess} />
       )}
+
+      <SaleEditorModal />
+
+      {/* Notifica lampo (successo/errore azioni) */}
+      {flashState && (
+        <div key={flashState.key} className={`flash-msg show${flashState.isError ? ' err' : ''}`} id="flashMsg">
+          {flashState.text}
+        </div>
+      )}
+
+      {/* Banner di avviso persistente per problemi di salvataggio/sync */}
+      {dataWarning && (
+        <div id="dataWarningBanner" className="show">
+          <span id="dataWarningText">{dataWarning}</span>
+          <button type="button" id="dataWarningDismiss" onClick={dismissWarning}>Ho capito</button>
+        </div>
+      )}
+
+      {/* Area usata per generare le pagine da stampare col dialogo di sistema.
+          Va nascosta a schermo e mostrata solo in stampa via CSS (@media print),
+          come nell'originale — non con uno style inline che vincerebbe anche in stampa. */}
+      <div id="printArea" />
     </>
+  );
+}
+
+function App() {
+  return (
+    <CassaProvider>
+      <Shell />
+    </CassaProvider>
   );
 }
 

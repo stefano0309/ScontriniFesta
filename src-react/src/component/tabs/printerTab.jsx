@@ -1,14 +1,21 @@
-// PrinterTab.jsx
-import { useState } from 'react';
+import { useCassa } from '../../store/CassaContext';
 
-function PrinterTab({ isActive, printers = [], categories = [], categoryAssignments = {}, onSaveAssignments, onAddPrinter, onDeletePrinter }) {
-    const [assignments, setAssignments] = useState(categoryAssignments);
+function PrinterTab({ isActive }) {
+    const { printers, categories, printerAssignments, savePrinterAssignments, addPrinter, deletePrinter } = useCassa();
 
     const handlePrinterChange = (category, printerId) => {
-        const updated = { ...assignments, [category]: printerId };
-        setAssignments(updated);
-        if (onSaveAssignments) {
-            onSaveAssignments(updated);
+        savePrinterAssignments({ ...printerAssignments, [category]: printerId });
+    };
+
+    const handleAddPrinter = () => {
+        if (typeof window.PrintersModule !== 'undefined' && window.PrintersModule.addPrinterModal) {
+            window.PrintersModule.addPrinterModal();
+        } else {
+            const name = window.prompt('Nome stampante:');
+            if (!name) return;
+            const type = window.prompt('Tipo (bluetooth/lan/usb):', 'bluetooth') || 'bluetooth';
+            const address = window.prompt('Indirizzo (MAC/IP):', '') || '';
+            addPrinter({ name, type, address });
         }
     };
 
@@ -22,13 +29,7 @@ function PrinterTab({ isActive, printers = [], categories = [], categoryAssignme
                     className="btn-teal btn-block"
                     id="addPrinterBtn"
                     style={{ marginBottom: '14px' }}
-                    onClick={() => {
-                        if (typeof window.PrintersModule !== 'undefined' && window.PrintersModule.addPrinterModal) {
-                            window.PrintersModule.addPrinterModal();
-                        } else if (onAddPrinter) {
-                            onAddPrinter();
-                        }
-                    }}
+                    onClick={handleAddPrinter}
                 >
                     + Aggiungi stampante
                 </button>
@@ -41,7 +42,7 @@ function PrinterTab({ isActive, printers = [], categories = [], categoryAssignme
                                 <div>
                                     <strong>{printer.name}</strong> <small>({printer.type} - {printer.address})</small>
                                 </div>
-                                <button type="button" className="btn-red" onClick={() => onDeletePrinter && onDeletePrinter(printer.id)}>
+                                <button type="button" className="btn-red" onClick={() => deletePrinter(printer.id)}>
                                     Rimuovi
                                 </button>
                             </div>
@@ -61,14 +62,12 @@ function PrinterTab({ isActive, printers = [], categories = [], categoryAssignme
                             <div key={cat} className="form-row-2" style={{ marginBottom: '10px', alignItems: 'center' }}>
                                 <span><strong>{cat}</strong></span>
                                 <select
-                                    value={assignments[cat] || ''}
+                                    value={printerAssignments[cat] || ''}
                                     onChange={(e) => handlePrinterChange(cat, e.target.value)}
                                 >
                                     <option value="">Nessuna stampante (Predefinita)</option>
                                     {printers.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name}
-                                        </option>
+                                        <option key={p.id} value={p.id}>{p.name}</option>
                                     ))}
                                 </select>
                             </div>

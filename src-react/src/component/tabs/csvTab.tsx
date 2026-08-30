@@ -1,47 +1,43 @@
-// CsvTab.jsx
 import { useState } from 'react';
+import { useCassa } from '../../store/CassaContext';
+import { parseCsvMenu } from '../../utils/csv';
 
-function CsvTab({ isActive, onImportCsv }) {
+function CsvTab({ isActive }) {
+    const { importMenu } = useCassa();
     const [file, setFile] = useState(null);
     const [replace, setReplace] = useState(false);
     const [status, setStatus] = useState('');
+    const [statusColor, setStatusColor] = useState('');
 
     const handleImport = () => {
         if (!file) {
-            setStatus('Seleziona un file CSV da importare.');
+            setStatus('Seleziona prima un file CSV.');
+            setStatusColor('var(--red)');
             return;
         }
-
         const reader = new FileReader();
-        reader.onload = (e) => {
-            const content = e.target.result;
-            const lines = content.split('\n');
-            const parsedDishes = [];
-
-            lines.forEach((line) => {
-                const parts = line.split(/[,;]/);
-                if (parts.length >= 3) {
-                    const name = parts[0].trim();
-                    const price = parseFloat(parts[1].trim());
-                    const category = parts[2].trim();
-
-                    if (name && !isNaN(price) && category) {
-                        parsedDishes.push({ id: Date.now() + Math.random(), name, price, category, type: 'dish' });
-                    }
-                }
-            });
-
-            if (parsedDishes.length > 0) {
-                if (onImportCsv) {
-                    onImportCsv(parsedDishes, replace);
-                }
-                setStatus(`Importati con successo ${parsedDishes.length} piatti.`);
-            } else {
-                setStatus('Impossibile leggere piatti dal file CSV.');
+        reader.onload = async (e) => {
+            const text = e.target.result;
+            const { items, errors } = parseCsvMenu(text);
+            if (items.length === 0) {
+                setStatus('Nessun piatto valido trovato nel CSV. Controlla il formato.');
+                setStatusColor('var(--red)');
+                return;
             }
+            if (replace && !window.confirm(`Sostituire l'intero menu con ${items.length} piatti importati?`)) return;
+            await importMenu(items, replace);
+            let msg = `Importati ${items.length} piatti.`;
+            if (errors.length > 0) msg += ` ${errors.length} righe saltate.`;
+            setStatus(msg);
+            setStatusColor(errors.length > 0 ? 'var(--amber)' : 'var(--green)');
+            if (errors.length > 0) console.warn('Errori import CSV:', errors);
+            setFile(null);
         };
-
-        reader.readAsText(file);
+        reader.onerror = () => {
+            setStatus('Errore nella lettura del file.');
+            setStatusColor('var(--red)');
+        };
+        reader.readAsText(file, 'UTF-8');
     };
 
     return (
@@ -77,7 +73,7 @@ function CsvTab({ isActive, onImportCsv }) {
                 >
                     ⇪ Importa CSV
                 </button>
-                <div className="status-line" id="csvStatus">{status}</div>
+                <div className="status-line" id="csvStatus" style={{ color: statusColor }}>{status}</div>
             </div>
         </div>
     );
