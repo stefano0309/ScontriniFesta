@@ -1,6 +1,6 @@
 import { useCassa } from '../../store/CassaContext';
 
-function PrinterTab({ isActive }) {
+function PrinterTab({ isActive = true }) {
     const { printers, categories, printerAssignments, savePrinterAssignments, addPrinter, deletePrinter } = useCassa();
 
     const handlePrinterChange = (category, printerId) => {

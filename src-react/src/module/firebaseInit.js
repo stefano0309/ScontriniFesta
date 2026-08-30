@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update, runTransaction, push, remove, get } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, update, runTransaction, push, remove, get, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -17,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
 
-window.FirebaseCassa = { app, db, auth, ref, onValue, set, update, runTransaction, push, remove, get };
+window.FirebaseCassa = { app, db, auth, ref, onValue, set, update, runTransaction, push, remove, get, onDisconnect, serverTimestamp };
 window.firebaseReady = false;
 
 // Se il primo tentativo fallisce (dispositivo partito offline, es. wifi

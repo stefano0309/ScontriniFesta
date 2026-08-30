@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useCassa } from '../../store/CassaContext';
 import { parseCsvMenu } from '../../utils/csv';
 
-function CsvTab({ isActive }) {
+function CsvTab({ isActive = true }) {
     const { importMenu } = useCassa();
     const [file, setFile] = useState(null);
     const [replace, setReplace] = useState(false);

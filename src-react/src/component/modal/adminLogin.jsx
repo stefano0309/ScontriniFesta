@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useCassa } from '../../store/CassaContext';
 
 function AdminLogin({ onClose, onLoginSuccess }) {
@@ -17,8 +18,12 @@ function AdminLogin({ onClose, onLoginSuccess }) {
     }
   };
 
-  return (
-    <div id="adminLoginOverlay" className="show">
+  return createPortal(
+    <div
+      id="adminLoginOverlay"
+      className="show"
+      style={{ display: 'flex', position: 'fixed', inset: 0, zIndex: 9999, alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)' }}
+    >
       <div className="login-card">
         <h3>Accesso amministratore</h3>
         <form onSubmit={handleSubmit}>
@@ -51,7 +56,8 @@ function AdminLogin({ onClose, onLoginSuccess }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
