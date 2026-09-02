@@ -31,12 +31,11 @@ jobs:
           else
             VERSION="${{ inputs.version }}"
           fi
-          # Extract major, minor, patch for version code
           IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
           VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-          echo "APK_NAME=ScontriniFesta-v${VERSION}.apk" >> "$GITHUB_OUTPUT"
+          echo "apk_name=ScontriniFesta-v${VERSION}.apk" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -76,54 +75,29 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Update Android app version
+      - name: Update app version in build.gradle
         shell: bash
         run: |
-          sed -i.bak "s/versionCode 1/versionCode ${{ steps.version.outputs.version_code }}/g" android/app/build.gradle
-          sed -i.bak "s/versionName \"1.0\"/versionName \"${{ steps.version.outputs.version }}\"/g" android/app/build.gradle
-          rm android/app/build.gradle.bak
-          echo "Updated versionCode to ${{ steps.version.outputs.version_code }} and versionName to ${{ steps.version.outputs.version }}"
+          sed -i "s/versionCode 1/versionCode ${{ steps.version.outputs.version_code }}/g" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"${{ steps.version.outputs.version }}\"/g" android/app/build.gradle
 
-      - name: Prepare Android signing
+      - name: Decode and setup keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        shell: bash
         run: |
-          set -euo pipefail
-
-          if [[ -z "$KEYSTORE_BASE64" || -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
-            echo "Missing Android signing secrets." >&2
-            exit 1
-          fi
-
           mkdir -p android/app
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          ls -lh android/app/release.keystore
 
-          test -s android/app/release.keystore
-
-          cat > android/keystore.properties <<EOF
-storeFile=app/release.keystore
-storePassword=${KEYSTORE_PASSWORD}
-keyAlias=${KEY_ALIAS}
-keyPassword=${KEY_PASSWORD}
-EOF
-
-          echo "Keystore prepared at android/app/release.keystore"
-
-      - name: Validate Android signing files
-        working-directory: android
-        shell: bash
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - name: Create keystore properties
         run: |
-          set -euo pipefail
-          test -s ./app/release.keystore
-          test -s ./keystore.properties
-          keytool -list -keystore ./app/release.keystore -storepass "$KEYSTORE_PASSWORD" >/dev/null
-          echo "Android keystore is valid."
+          cat > android/keystore.properties << 'KEYSTORE_EOF'
+          storeFile=app/release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_EOF
+          cat android/keystore.properties
 
       - name: Build signed release APK
         working-directory: android
@@ -131,25 +105,20 @@ EOF
           chmod +x gradlew
           ./gradlew clean assembleRelease --stacktrace
 
-      - name: Verify release APK
-        shell: bash
+      - name: Verify APK was created
         run: |
-          set -euo pipefail
-          test -s android/app/build/outputs/apk/release/app-release.apk
-          echo "Signed APK created successfully."
+          ls -lh android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Rename APK
-        shell: bash
+      - name: Prepare release artifacts
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk "release/${{ steps.version.outputs.APK_NAME }}"
+          cp android/app/build/outputs/apk/release/app-release.apk "release/${{ steps.version.outputs.apk_name }}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ScontriniFesta-v${{ steps.version.outputs.version }}-APK
-          path: release/${{ steps.version.outputs.APK_NAME }}
-          if-no-files-found: error
+          path: release/${{ steps.version.outputs.apk_name }}
           retention-days: 30
 
       - name: Create GitHub Release
@@ -159,4 +128,4 @@ EOF
           tag_name: ${{ github.ref_name }}
           name: ScontriniFesta v${{ steps.version.outputs.version }}
           generate_release_notes: true
-          files: release/${{ steps.version.outputs.APK_NAME }}
+          files: release/${{ steps.version.outputs.apk_name }}
