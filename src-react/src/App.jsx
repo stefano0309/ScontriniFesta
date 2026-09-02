@@ -2,7 +2,7 @@ import { useState } from 'react';
 import CashierView from './component/view/cashierView';
 import AdminLogin from './component/modal/adminLogin';
 import AdminView from './component/view/adminView';
-import SaleEditorModal from './component/modal/saleEditor';
+import SaleEditorModal from './component/modal/Saleeditor';
 import { CassaProvider, useCassa } from './store/CassaContext.jsx';
 // Importa ed esegue il file di inizializzazione Firebase
 import './module/firebaseInit.js';
