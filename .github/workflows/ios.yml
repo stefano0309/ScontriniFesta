@@ -7,6 +7,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-latest
@@ -15,28 +18,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            src-react/package-lock.json
 
-      # Dipendenze
-      - name: Install dependencies
+      - name: Install Capacitor dependencies
         run: npm ci
 
-      # Capacitor
-      - name: Sync Capacitor
+      - name: Install React dependencies
+        working-directory: src-react
+        run: npm ci
+
+      - name: Build React web app
+        working-directory: src-react
+        run: npm run build
+
+      - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      # CocoaPods
       - name: Install CocoaPods dependencies
         working-directory: ios/App
         run: pod install
 
-      # Build iOS Simulator
-      - name: Build iOS
+      - name: Build iOS Simulator
         working-directory: ios/App
         run: |
           xcodebuild \
@@ -47,10 +56,9 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO
 
-      # Upload
       - name: Upload iOS build
         uses: actions/upload-artifact@v4
         with:
-          name: TallonciniCassa-iOS
+          name: Tabby-iOS-Simulator
           path: ios/App/build
           if-no-files-found: error
