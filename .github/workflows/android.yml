@@ -84,7 +84,10 @@ jobs:
             echo "Missing Android signing secrets. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD." >&2
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/release.keystore
+
+          # Gradle's app module resolves storeFile relative to android/app.
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+
           cat > android/keystore.properties <<EOF
           storeFile=release.keystore
           storePassword=$KEYSTORE_PASSWORD
@@ -99,12 +102,34 @@ jobs:
           from pathlib import Path
           p = Path('android/app/build.gradle')
           text = p.read_text()
+
           if 'keystore.properties' not in text:
-              text = """def keystorePropertiesFile = rootProject.file('keystore.properties')\ndef keystoreProperties = new Properties()\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n}\n\n""" + text
+              text = """def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+""" + text
+
           if 'signingConfigs {' not in text:
-              text = text.replace('android {', """android {\n    signingConfigs {\n        release {\n            if (keystorePropertiesFile.exists()) {\n                storeFile file(keystoreProperties['storeFile'])\n                storePassword keystoreProperties['storePassword']\n                keyAlias keystoreProperties['keyAlias']\n                keyPassword keystoreProperties['keyPassword']\n            }\n        }\n    }\n""", 1)
+              text = text.replace('android {', """android {
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+""", 1)
+
           if 'signingConfig signingConfigs.release' not in text:
-              text = text.replace('buildTypes {', """buildTypes {\n        release {\n            signingConfig signingConfigs.release\n        }\n""", 1)
+              text = text.replace('release {', """release {
+            signingConfig signingConfigs.release""", 1)
+
           p.write_text(text)
           PY
 
