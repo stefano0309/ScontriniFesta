@@ -40,6 +40,9 @@ jobs:
         working-directory: ./src-react
         run: npm run build
 
+      - name: Crea file .nojekyll
+        run: touch ./www/.nojekyll # Usa ./src-react/www/.nojekyll se www è dentro src-react
+
       - name: Configura GitHub Pages
         uses: actions/configure-pages@v5
 
