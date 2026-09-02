@@ -80,64 +80,98 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         shell: bash
         run: |
+          set -euo pipefail
+
           if [[ -z "$KEYSTORE_BASE64" || -z "$KEYSTORE_PASSWORD" || -z "$KEY_ALIAS" || -z "$KEY_PASSWORD" ]]; then
             echo "Missing Android signing secrets. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD." >&2
             exit 1
           fi
 
-          # Gradle's app module resolves storeFile relative to android/app.
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+          mkdir -p android/app
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+
+          if [[ ! -s android/app/release.keystore ]]; then
+            echo "The decoded Android keystore is empty or invalid." >&2
+            exit 1
+          fi
 
           cat > android/keystore.properties <<EOF
-          storeFile=release.keystore
-          storePassword=$KEYSTORE_PASSWORD
-          keyAlias=$KEY_ALIAS
-          keyPassword=$KEY_PASSWORD
-          EOF
+storeFile=${GITHUB_WORKSPACE}/android/app/release.keystore
+storePassword=$KEYSTORE_PASSWORD
+keyAlias=$KEY_ALIAS
+keyPassword=$KEY_PASSWORD
+EOF
 
       - name: Configure release signing
         shell: bash
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('android/app/build.gradle')
-          text = p.read_text()
 
-          if 'keystore.properties' not in text:
-              text = """def keystorePropertiesFile = rootProject.file('keystore.properties')
-def keystoreProperties = new Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-}
+          path = Path('android/app/build.gradle')
+          text = path.read_text()
 
-""" + text
+          header = '''def keystorePropertiesFile = rootProject.file("keystore.properties")
+          def keystoreProperties = new Properties()
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+
+          '''
+
+          if 'def keystorePropertiesFile' not in text:
+              text = header + text
+
+          signing_block = '''
+              signingConfigs {
+                  release {
+                      if (keystorePropertiesFile.exists()) {
+                          storeFile file(keystoreProperties['storeFile'])
+                          storePassword keystoreProperties['storePassword']
+                          keyAlias keystoreProperties['keyAlias']
+                          keyPassword keystoreProperties['keyPassword']
+                      }
+                  }
+              }
+          '''
 
           if 'signingConfigs {' not in text:
-              text = text.replace('android {', """android {
-    signingConfigs {
-        release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-            }
-        }
-    }
-""", 1)
+              marker = '    buildTypes {'
+              if marker not in text:
+                  raise SystemExit('Unable to locate buildTypes in android/app/build.gradle')
+              text = text.replace(marker, signing_block + '\n' + marker, 1)
+
+          release_marker = '''        release {
+            minifyEnabled false'''
+          release_replacement = '''        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false'''
 
           if 'signingConfig signingConfigs.release' not in text:
-              text = text.replace('release {', """release {
-            signingConfig signingConfigs.release""", 1)
+              if release_marker not in text:
+                  raise SystemExit('Unable to locate release build type in android/app/build.gradle')
+              text = text.replace(release_marker, release_replacement, 1)
 
-          p.write_text(text)
+          path.write_text(text)
           PY
+
+          test -f android/app/release.keystore
+          grep -q 'signingConfig signingConfigs.release' android/app/build.gradle
+          grep -q 'storeFile file(keystoreProperties' android/app/build.gradle
 
       - name: Build signed release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew clean assembleRelease --stacktrace
+
+      - name: Verify release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s android/app/build/outputs/apk/release/app-release.apk
+          echo "Signed APK created successfully."
 
       - name: Rename APK
         shell: bash
