@@ -40,3 +40,8 @@ Pods/
 .idea/
 .vscode/
 *.iml
+
+
+release.keystore
+*.keystore
+keystore.properties
