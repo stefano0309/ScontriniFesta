@@ -1,0 +1,309 @@
+name: Application Tests
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+      - master
+      - develop
+
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+
+  # ============================================================
+  # WEB + CAPACITOR COMMON TESTS
+  # ============================================================
+
+  web-tests:
+    name: Webapp & Capacitor Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --------------------------------------------------------
+      # PROJECT STRUCTURE
+      # --------------------------------------------------------
+
+      - name: Verify Project Structure
+        run: |
+          echo "=== PROJECT STRUCTURE ==="
+
+          test -f package.json
+          echo "✓ package.json"
+
+          test -f package-lock.json
+          echo "✓ package-lock.json"
+
+          test -f capacitor.config.ts
+          echo "✓ capacitor.config.ts"
+
+          test -d www
+          echo "✓ www/"
+
+          test -f www/index.html
+          echo "✓ www/index.html"
+
+          echo ""
+          echo "✓ Struttura progetto verificata"
+
+      # --------------------------------------------------------
+      # PACKAGE
+      # --------------------------------------------------------
+
+      - name: Verify Capacitor Dependencies
+        run: |
+          echo "=== CAPACITOR DEPENDENCIES ==="
+
+          npm list @capacitor/core
+          npm list @capacitor/cli
+          npm list @capacitor/android
+          npm list @capacitor/ios
+
+          echo "✓ Dipendenze Capacitor verificate"
+
+      # --------------------------------------------------------
+      # CAPACITOR CONFIG
+      # --------------------------------------------------------
+
+      - name: Verify Capacitor Configuration
+        run: |
+          echo "=== CAPACITOR CONFIG ==="
+
+          grep -q "appId" capacitor.config.ts
+          grep -q "appName" capacitor.config.ts
+          grep -q "webDir" capacitor.config.ts
+          grep -q "'www'" capacitor.config.ts || \
+          grep -q '"www"' capacitor.config.ts
+
+          echo "✓ capacitor.config.ts verificato"
+
+      # --------------------------------------------------------
+      # WEBAPP SYNTAX
+      # --------------------------------------------------------
+
+      - name: Check JavaScript
+        run: |
+          echo "=== JAVASCRIPT CHECK ==="
+
+          JS_FILES=$(find www -name "*.js")
+
+          if [ -z "$JS_FILES" ]; then
+            echo "Nessun file JavaScript trovato"
+            exit 0
+          fi
+
+          for file in $JS_FILES; do
+            echo "Controllo $file"
+
+            node --check "$file"
+
+            echo "✓ $file"
+          done
+
+      # --------------------------------------------------------
+      # HTML
+      # --------------------------------------------------------
+
+      - name: Verify HTML
+        run: |
+          echo "=== HTML CHECK ==="
+
+          HTML="www/index.html"
+
+          grep -qi "<html" "$HTML"
+          grep -qi "<head" "$HTML"
+          grep -qi "<body" "$HTML"
+
+          echo "✓ HTML valido"
+
+      # --------------------------------------------------------
+      # CAPACITOR ANDROID SYNC
+      # --------------------------------------------------------
+
+      - name: Sync Android
+        run: |
+          npx cap sync android
+
+      - name: Verify Android Project
+        run: |
+          test -d android
+          test -f android/gradlew
+          test -f android/settings.gradle
+          test -d android/app
+
+          echo "✓ Progetto Android Capacitor verificato"
+
+      # --------------------------------------------------------
+      # CAPACITOR IOS SYNC
+      # --------------------------------------------------------
+
+      - name: Sync iOS
+        run: |
+          npx cap sync ios
+
+      - name: Verify iOS Project
+        run: |
+          test -d ios
+          test -d ios/App
+
+          echo "✓ Progetto iOS Capacitor verificato"
+
+      # --------------------------------------------------------
+      # UPLOAD
+      # --------------------------------------------------------
+
+      - name: Upload Web Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-capacitor-test-results
+          path: |
+            capacitor.config.ts
+            package.json
+            package-lock.json
+          retention-days: 7
+
+
+  # ============================================================
+  # ANDROID BUILD
+  # ============================================================
+
+  android:
+    name: Android Build Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Sync Capacitor
+        run: |
+          npx cap sync android
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Android
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          test -f "$APK"
+
+          echo "✓ APK generato"
+
+          unzip -t "$APK" >/dev/null
+
+          echo "✓ APK integro"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+
+  # ============================================================
+  # IOS BUILD
+  # ============================================================
+
+  ios:
+    name: iOS Build Test
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Capacitor
+        run: |
+          npx cap sync ios
+
+      - name: Install CocoaPods
+        working-directory: ios/App
+        run: |
+          pod install
+
+      - name: Build iOS
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify iOS Build
+        run: |
+          test -d ios/App/build
+
+          echo "✓ Build iOS completata"
+
+      - name: Upload iOS Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-build
+          path: ios/App/build

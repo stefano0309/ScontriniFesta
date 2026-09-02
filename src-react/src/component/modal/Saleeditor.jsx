@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useCassa } from '../../store/CassaContext';
 import { formatTicketNum } from '../../utils/format';
 import { cloneSaleLines } from '../../utils/menu';
@@ -59,19 +58,8 @@ function SaleEditorModal() {
     }
   };
 
-  return createPortal(
-    <div
-      className="admin-history-modal"
-      style={{
-        display: 'flex',
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.55)',
-      }}
-    >
+  return (
+    <div className="admin-history-modal" style={{ display: 'flex' }}>
       <div className="admin-history-modal-card">
         <div className="admin-history-modal-head">
           <div>
@@ -133,8 +121,7 @@ function SaleEditorModal() {
           </button>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }
 

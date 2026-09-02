@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useCassa } from '../../store/CassaContext';
 import { formatTicketNum } from '../../utils/format';
 
-function SettingsTab({ isActive = true }) {
+function SettingsTab({ isActive }) {
     const {
         settings, categories, deviceTag, creds, ticketCounter,
         saveSettings, saveCreds, setDeviceTag, resetCounter,

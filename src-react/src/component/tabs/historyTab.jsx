@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useCassa } from '../../store/CassaContext';
 import { formatTicketNum } from '../../utils/format';
 
@@ -25,7 +24,7 @@ function ahTotal(sale) {
     return ahLines(sale).reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
 }
 
-function HistoryTab({ isActive = true }) {
+function HistoryTab({ isActive }) {
     const { salesLog, settings, setSaleVoided, openSaleEditor, printReceipt } = useCassa();
 
     const [search, setSearch] = useState('');
@@ -165,14 +164,8 @@ function HistoryTab({ isActive = true }) {
                 </div>
             </div>
 
-            {detailSale && createPortal(
-                <div
-                    className="admin-history-modal"
-                    style={{
-                        display: 'flex', position: 'fixed', inset: 0, zIndex: 9999,
-                        alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)',
-                    }}
-                >
+            {detailSale && (
+                <div className="admin-history-modal" style={{ display: 'flex' }}>
                     <div className="admin-history-modal-card">
                         <div className="admin-history-modal-head">
                             <div>
@@ -219,8 +212,7 @@ function HistoryTab({ isActive = true }) {
                             <button type="button" className="secondary" onClick={() => setDetailSale(null)}>Chiudi</button>
                         </div>
                     </div>
-                </div>,
-                document.body
+                </div>
             )}
         </div>
     );
