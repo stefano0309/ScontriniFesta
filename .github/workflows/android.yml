@@ -31,7 +31,11 @@ jobs:
           else
             VERSION="${{ inputs.version }}"
           fi
+          # Extract major, minor, patch for version code
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
           echo "APK_NAME=ScontriniFesta-v${VERSION}.apk" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
@@ -72,6 +76,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Update Android app version
+        shell: bash
+        run: |
+          sed -i.bak "s/versionCode 1/versionCode ${{ steps.version.outputs.version_code }}/g" android/app/build.gradle
+          sed -i.bak "s/versionName \"1.0\"/versionName \"${{ steps.version.outputs.version }}\"/g" android/app/build.gradle
+          rm android/app/build.gradle.bak
+          echo "Updated versionCode to ${{ steps.version.outputs.version_code }} and versionName to ${{ steps.version.outputs.version }}"
+
       - name: Prepare Android signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -93,7 +105,7 @@ jobs:
           test -s android/app/release.keystore
 
           cat > android/keystore.properties <<EOF
-storeFile=./app/release.keystore
+storeFile=app/release.keystore
 storePassword=$KEYSTORE_PASSWORD
 keyAlias=$KEY_ALIAS
 keyPassword=$KEY_PASSWORD
