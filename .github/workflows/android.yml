@@ -104,11 +104,11 @@ jobs:
 
           test -s android/app/release.keystore
 
-          cat > android/keystore.properties <<'EOF'
+          cat > android/keystore.properties <<EOF
 storeFile=app/release.keystore
-storePassword=$KEYSTORE_PASSWORD
-keyAlias=$KEY_ALIAS
-keyPassword=$KEY_PASSWORD
+storePassword=${KEYSTORE_PASSWORD}
+keyAlias=${KEY_ALIAS}
+keyPassword=${KEY_PASSWORD}
 EOF
 
           echo "Keystore prepared at android/app/release.keystore"
