@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCassa } from '../../store/CassaContext';
 import { groupByCategory, formatTicketNum } from '../../utils/format';
-import PaymentModal from '../modal/PaymentModal';
+import { PaymentModal } from '..';
 
 function CashierView({ onOpenAdmin }) {
   const {
