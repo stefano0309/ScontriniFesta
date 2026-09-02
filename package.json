@@ -1,22 +1,28 @@
 {
-  "name": "tabby",
-  "version": "1.0.0",
-  "description": "Questo progetto trasforma `talloncini-cassa-5.html` in una vera app Android tramite WebView.",
-  "main": "index.js",
+  "name": "scontrini-festa",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Sistema digitale per la gestione degli scontrini e delle casse della festa, con frontend React e app Capacitor.",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "install:web": "npm --prefix src-react ci",
+    "dev": "npm --prefix src-react run dev",
+    "build:web": "npm --prefix src-react run build",
+    "build": "npm run build:web",
+    "lint": "npm --prefix src-react run lint",
+    "sync:android": "npm run build:web && npx cap sync android",
+    "sync:ios": "npm run build:web && npx cap sync ios",
+    "sync": "npm run build:web && npx cap sync",
+    "test": "npm run lint"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/stefano0309/ScontriniFesta.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["capacitor", "react", "android", "ios", "pos", "receipts"],
+  "author": "Stefano Dutto",
   "license": "ISC",
-  "type": "module",
-  "bugs": {
-    "url": "https://github.com/stefano0309/ScontriniFesta/issues"
-  },
+  "bugs": { "url": "https://github.com/stefano0309/ScontriniFesta/issues" },
   "homepage": "https://github.com/stefano0309/ScontriniFesta#readme",
   "dependencies": {
     "@capacitor/android": "^8.5.0",
