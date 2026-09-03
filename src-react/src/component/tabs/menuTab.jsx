@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useCassa } from '../../store/CassaContext';
 import { groupByCategory } from '../../utils/format';
 
-function MenuTab({ isActive = true }) {
+function MenuTab({ isActive }) {
   const { menu, categories, addDish, updateDish, deleteDish } = useCassa();
 
   const [dishType, setDishType] = useState('dish');

@@ -1,6 +1,6 @@
 import { useCassa } from '../../store/CassaContext';
 
-function CloseTab({ isActive = true }) {
+function CloseTab({ isActive }) {
     const { salesLog, cashFloat, cashAdditions, cashAdditionsTotal, aggregateSalesLog, settings, printCloseSummary, resetClose } = useCassa();
 
     const additionsTotal = cashAdditionsTotal();

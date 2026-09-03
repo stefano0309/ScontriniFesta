@@ -22,21 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve version
-        id: version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="${{ inputs.version }}"
-          fi
-          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
-          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-          echo "apk_name=ScontriniFesta-v${VERSION}.apk" >> "$GITHUB_OUTPUT"
-
+      # Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -46,86 +32,44 @@ jobs:
             package-lock.json
             src-react/package-lock.json
 
-      - name: Install Capacitor dependencies
+      # Dipendenze Capacitor
+      - name: Install dependencies
         run: npm ci
 
-      - name: Install React dependencies
-        working-directory: src-react
-        run: npm ci
-
-      - name: Build React web app
-        working-directory: src-react
-        run: npm run build
-
+      # Java
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
+      # Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 36
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Android SDK
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Sync Capacitor Android
+      # Capacitor
+      - name: Sync Capacitor
         run: npx cap sync android
 
+      # Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Update app version in build.gradle
-        shell: bash
-        run: |
-          sed -i "s/versionCode 1/versionCode ${{ steps.version.outputs.version_code }}/g" android/app/build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"${{ steps.version.outputs.version }}\"/g" android/app/build.gradle
-
-      - name: Decode and setup keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          mkdir -p android/app
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
-          ls -lh android/app/release.keystore
-
-      - name: Create keystore properties
-        run: |
-          cat > android/keystore.properties << 'KEYSTORE_EOF'
-          storeFile=app/release.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEYSTORE_EOF
-          cat android/keystore.properties
-
-      - name: Build signed release APK
+      # Build
+      - name: Build APK
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew clean assembleRelease --stacktrace
 
-      - name: Verify APK was created
-        run: |
-          ls -lh android/app/build/outputs/apk/release/app-release.apk
-
-      - name: Prepare release artifacts
-        run: |
-          mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk "release/${{ steps.version.outputs.apk_name }}"
-
-      - name: Upload APK artifact
+      # Upload APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ScontriniFesta-v${{ steps.version.outputs.version }}-APK
-          path: release/${{ steps.version.outputs.apk_name }}
-          retention-days: 30
-
-      - name: Create GitHub Release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ScontriniFesta v${{ steps.version.outputs.version }}
-          generate_release_notes: true
-          files: release/${{ steps.version.outputs.apk_name }}
+          name: TallonciniCassa-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

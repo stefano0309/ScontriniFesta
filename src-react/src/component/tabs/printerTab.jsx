@@ -1,21 +1,23 @@
 import { useCassa } from '../../store/CassaContext';
+import PrintersBridge from '../../module/printersBridge';
 
-function PrinterTab({ isActive = true }) {
+function PrinterTab({ isActive }) {
     const { printers, categories, printerAssignments, savePrinterAssignments, addPrinter, deletePrinter } = useCassa();
 
     const handlePrinterChange = (category, printerId) => {
         savePrinterAssignments({ ...printerAssignments, [category]: printerId });
     };
 
-    const handleAddPrinter = () => {
-        if (typeof window.PrintersModule !== 'undefined' && window.PrintersModule.addPrinterModal) {
-            window.PrintersModule.addPrinterModal();
-        } else {
-            const name = window.prompt('Nome stampante:');
-            if (!name) return;
-            const type = window.prompt('Tipo (bluetooth/lan/usb):', 'bluetooth') || 'bluetooth';
-            const address = window.prompt('Indirizzo (MAC/IP):', '') || '';
-            addPrinter({ name, type, address });
+    const handleAddPrinter = async () => {
+        // Prefer native bridge when available
+        try {
+            const res = PrintersBridge.addPrinterModal();
+            const printer = res instanceof Promise ? await res : res;
+            if (!printer) return;
+            // If native bridge handled UI internally it may return null; otherwise add returned printer
+            if (printer.name) addPrinter(printer);
+        } catch (e) {
+            console.error('Printer add failed:', e);
         }
     };
 

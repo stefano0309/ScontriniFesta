@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useCassa } from '../../store/CassaContext';
 import { groupByCategory, formatTicketNum } from '../../utils/format';
+import { PaymentModal } from '..';
 
 function CashierView({ onOpenAdmin }) {
   const {
@@ -20,14 +21,11 @@ function CashierView({ onOpenAdmin }) {
 
   const lastSale = getLatestEditableSale();
 
-  const handlePrint = async () => {
+  const [showPayment, setShowPayment] = useState(false);
+
+  const handlePrint = () => {
     if (order.length === 0 || printing) return;
-    setPrinting(true);
-    try {
-      await printOrder();
-    } finally {
-      setPrinting(false);
-    }
+    setShowPayment(true);
   };
 
   const handleClear = () => {
@@ -148,6 +146,7 @@ function CashierView({ onOpenAdmin }) {
           <button id="printOrderBtn" disabled={order.length === 0 || printing} onClick={handlePrint}>
             🖨 Invia e Stampa
           </button>
+          {showPayment && <PaymentModal onClose={() => setShowPayment(false)} />}
           <button id="clearOrderCashierBtn" onClick={handleClear}>Svuota ordine</button>
         </div>
       </div>

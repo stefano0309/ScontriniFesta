@@ -1,23 +1,14 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { useCassa } from '../../store/CassaContext';
-
-// Mappa rotta -> id permesso (deve combaciare con TAB_LABELS in rolesTab.jsx
-// e con ADMIN_TAB_IDS/DEFAULT_ROLES in CassaContext.jsx).
-const NAV_ITEMS = [
-  { id: 'menuTab', path: 'menu', label: 'Menu' },
-  { id: 'csvTab', path: 'csv', label: 'Importa CSV' },
-  { id: 'cashFloatTab', path: 'cash', label: '💰 Fondo Cassa' },
-  { id: 'closeTab', path: 'close', label: 'Chiusura Cassa' },
-  { id: 'page-history', path: 'history', label: '🧾 Storico' },
-  { id: 'printersTab', path: 'printers', label: '🖨️ Stampanti' },
-  { id: 'devicesTab', path: 'devices', label: '📱 Dispositivi' },
-  { id: 'rolesTab', path: 'roles', label: '🔐 Ruoli' },
-  { id: 'settingsTab', path: 'settings', label: 'Impostazioni' },
-];
+import { useState } from 'react';
+import CsvTab from '../tabs/csvTab';
+import CashTab from '../tabs/cashTab';
+import MenuTab from '../tabs/menuTab';
+import CloseTab from '../tabs/closeTab';
+import SettingsTab from '../tabs/settingsTab';
+import PrinterTab from '../tabs/printerTab';
+import HistoryTab from '../tabs/historyTab';
 
 function AdminView({ onBack }) {
-  const { canAccessTab } = useCassa();
-  const visibleItems = NAV_ITEMS.filter((item) => canAccessTab(item.id));
+  const [activeTab, setActiveTab] = useState('menuTab');
 
   return (
     <div id="adminView">
@@ -30,19 +21,22 @@ function AdminView({ onBack }) {
         </div>
 
         <div className="tabs">
-          {visibleItems.map((item) => (
-            <NavLink
-              key={item.id}
-              to={item.path}
-              className={({ isActive }) => `tab-btn ${isActive ? 'active' : ''}`}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          <button className={`tab-btn ${activeTab === 'menuTab' ? 'active' : ''}`} onClick={() => setActiveTab('menuTab')}>Menu</button>
+          <button className={`tab-btn ${activeTab === 'csvTab' ? 'active' : ''}`} onClick={() => setActiveTab('csvTab')}>Importa CSV</button>
+          <button className={`tab-btn ${activeTab === 'cashFloatTab' ? 'active' : ''}`} onClick={() => setActiveTab('cashFloatTab')}>💰 Fondo Cassa</button>
+          <button className={`tab-btn ${activeTab === 'closeTab' ? 'active' : ''}`} onClick={() => setActiveTab('closeTab')}>Chiusura Cassa</button>
+          <button className={`tab-btn ${activeTab === 'page-history' ? 'active' : ''}`} onClick={() => setActiveTab('page-history')}>🧾 Storico</button>
+          <button className={`tab-btn ${activeTab === 'printersTab' ? 'active' : ''}`} onClick={() => setActiveTab('printersTab')}>🖨️ Stampanti</button>
+          <button className={`tab-btn ${activeTab === 'settingsTab' ? 'active' : ''}`} onClick={() => setActiveTab('settingsTab')}>Impostazioni</button>
         </div>
 
-        {/* La rotta attiva sotto /admin/* viene renderizzata qui */}
-        <Outlet />
+        <MenuTab isActive={activeTab === 'menuTab'} />
+        <CsvTab isActive={activeTab === 'csvTab'} />
+        <CashTab isActive={activeTab === 'cashFloatTab'} />
+        <CloseTab isActive={activeTab === 'closeTab'} />
+        <SettingsTab isActive={activeTab === 'settingsTab'} />
+        <PrinterTab isActive={activeTab === 'printersTab'} />
+        <HistoryTab isActive={activeTab === 'page-history'} />
       </div>
     </div>
   );

@@ -35,16 +35,6 @@ const DEFAULT_SETTINGS = {
 };
 const DEFAULT_CREDS = { username: 'admin', password: 'admin' };
 
-// Ruoli predefiniti (seed), usati solo se su Firebase/locale non è stata
-// ancora configurata nessuna lista ruoli. 'admin' vede tutto per non rompere
-// il funzionamento attuale a dispositivo singolo; gli altri sono un punto di
-// partenza per differenziare i permessi quando si aggiungono più dispositivi.
-const ADMIN_TAB_IDS = ['menuTab', 'csvTab', 'cashFloatTab', 'closeTab', 'page-history', 'printersTab', 'devicesTab', 'rolesTab', 'settingsTab'];
-const DEFAULT_ROLES = {
-  admin: { id: 'admin', name: 'Amministratore', permissions: Object.fromEntries(ADMIN_TAB_IDS.map((t) => [t, true])) },
-  cassiere: { id: 'cassiere', name: 'Cassiere', permissions: { menuTab: false, csvTab: false, cashFloatTab: true, closeTab: false, 'page-history': true, printersTab: false, devicesTab: false, rolesTab: false, settingsTab: false } },
-};
-
 const CassaContext = createContext(null);
 
 export function useCassa() {
@@ -69,12 +59,6 @@ export function CassaProvider({ children }) {
   const [printers, setPrinters, printersRef] = useStateRef(() => safeGet('printers', []));
   const [printerAssignments, setPrinterAssignments, printerAssignmentsRef] = useStateRef(() => safeGet('printer-assignments', {}));
   const [deviceTag, setDeviceTagState] = useState(() => getDeviceTag());
-
-  // Presenza/registro dispositivi (per la vista "Dispositivi") e configurazione
-  // ruoli (per la vista "Ruoli"). Sincronizzati da Firebase quando disponibile,
-  // con fallback locale in sola lettura quando offline.
-  const [devices, setDevices, devicesRef] = useStateRef(() => safeGet('devices', {}));
-  const [rolesConfig, setRolesConfig, rolesConfigRef] = useStateRef(() => safeGet('roles-config', DEFAULT_ROLES));
 
   const [firebaseReady, setFirebaseReady] = useState(!!window.firebaseReady);
   const [firebaseOfflineWarned, setFirebaseOfflineWarned] = useState(false);
@@ -213,51 +197,6 @@ export function CassaProvider({ children }) {
     }
   }, []);
 
-  // ---------------- PRESENZA DISPOSITIVO ----------------
-  // Ad ogni connessione, il dispositivo pubblica le proprie informazioni
-  // (etichetta, user agent/piattaforma, versione app) sotto cassa/devices/{id}
-  // e registra un onDisconnect() così, se la connessione cade (chiusura app,
-  // rete persa), Firebase stesso marca il dispositivo offline lato server
-  // senza bisogno che nessun altro client debba dedurlo.
-  const publishDevicePresence = useCallback(async () => {
-    if (!window.firebaseReady || !window.FirebaseCassa) return;
-    try {
-      const { db, ref, set, update, onDisconnect, serverTimestamp } = window.FirebaseCassa;
-      const deviceId = getDeviceId();
-      const devRef = ref(db, 'cassa/devices/' + deviceId);
-      const info = {
-        deviceId,
-        tag: getDeviceTag(),
-        userAgent: navigator.userAgent || '',
-        platform: navigator.platform || '',
-        language: navigator.language || '',
-        appVersion: (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'),
-        online: true,
-        lastSeenAt: serverTimestamp(),
-        connectedAt: serverTimestamp(),
-      };
-      await update(devRef, info);
-      // Se non è ancora stato assegnato un ruolo a questo dispositivo, di
-      // default è 'admin' (piena visibilità) per non rompere l'uso attuale a
-      // dispositivo singolo: l'admin potrà poi restringerlo dalla vista Dispositivi.
-      onDisconnect(devRef).update({ online: false, lastSeenAt: serverTimestamp() });
-    } catch (e) {
-      console.error('Firebase publishDevicePresence:', e);
-    }
-  }, []);
-
-  // Battito periodico: aggiorna "ultimo visto" anche se l'app resta aperta a
-  // lungo senza altre scritture (onDisconnect copre solo la disconnessione).
-  useEffect(() => {
-    if (!firebaseReady) return;
-    const interval = setInterval(() => {
-      if (!window.firebaseReady || !window.FirebaseCassa) return;
-      const { db, ref, update, serverTimestamp } = window.FirebaseCassa;
-      update(ref(db, 'cassa/devices/' + getDeviceId()), { lastSeenAt: serverTimestamp(), online: true }).catch(() => {});
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [firebaseReady]);
-
   // ---------------- SYNC FIREBASE (bootstrap + listener) ----------------
   const verifyDeviceTagClaim = useCallback(async () => {
     if (!window.firebaseReady || !window.FirebaseCassa) return;
@@ -282,20 +221,19 @@ export function CassaProvider({ children }) {
     await verifyDeviceTagClaim();
     try {
       const { db, ref, get, set, update, push } = window.FirebaseCassa;
-      const [menuSnap, settingsSnap, counterSnap, salesSnap, cashFloatSnap, rolesSnap] = await Promise.all([
+      const [menuSnap, settingsSnap, counterSnap, salesSnap, cashFloatSnap] = await Promise.all([
         get(ref(db, 'cassa/menu')),
         get(ref(db, 'cassa/settings')),
         get(ref(db, 'cassa/counters/' + getDeviceTag())),
         get(ref(db, 'cassa/sales')),
         get(ref(db, 'cassa/cashFloat')),
-        get(ref(db, 'cassa/rolesConfig')),
       ]);
       const writes = [];
       if (!menuSnap.exists() && menuRef.current.length) writes.push(set(ref(db, 'cassa/menu'), Object.fromEntries(menuRef.current.map((x) => [x.id, x]))));
       if (!settingsSnap.exists()) writes.push(set(ref(db, 'cassa/settings'), settingsRef.current));
       if (!counterSnap.exists()) writes.push(set(ref(db, 'cassa/counters/' + getDeviceTag()), ticketCounterRef.current));
       if (!cashFloatSnap.exists() && cashFloatRef.current.setAt) writes.push(set(ref(db, 'cassa/cashFloat'), cashFloatRef.current));
-      if (!rolesSnap.exists()) writes.push(set(ref(db, 'cassa/rolesConfig'), DEFAULT_ROLES));
+
       const pendingAdditions = cashAdditionsRef.current.filter((a) => !a._fbKey);
       pendingAdditions.forEach((a) => {
         const newRef = push(ref(db, 'cassa/cashAdditions'));
@@ -366,22 +304,8 @@ export function CassaProvider({ children }) {
       safeSet('cash-additions', next);
     });
 
-    onValue(ref(db, 'cassa/devices'), (snap) => {
-      const data = snap.val() || {};
-      setDevices(data);
-      safeSet('devices', data);
-    });
-
-    onValue(ref(db, 'cassa/rolesConfig'), (snap) => {
-      const data = snap.val();
-      if (data && Object.keys(data).length) {
-        setRolesConfig(data);
-        safeSet('roles-config', data);
-      }
-    });
-
     console.log('Sincronizzazione Firebase attiva');
-  }, [setMenu, setSettings, setSalesLog, setCashFloat, setCashAdditions, setDevices, setRolesConfig]);
+  }, [setMenu, setSettings, setSalesLog, setCashFloat, setCashAdditions]);
 
   useEffect(() => {
     const onFirebaseReady = () => {
@@ -390,7 +314,6 @@ export function CassaProvider({ children }) {
       if (ready) {
         setFirebaseOfflineWarned(false);
         bootstrapFirebaseFromLocal().then(() => setupFirebaseSync());
-        publishDevicePresence();
         flash('Firebase sincronizzato');
       } else {
         setFirebaseOfflineWarned((already) => {
@@ -832,93 +755,6 @@ export function CassaProvider({ children }) {
     safeSet('printer-assignments', assignments);
   }, []);
 
-  // ---------------- DISPOSITIVI (vista "Dispositivi") ----------------
-  const setDeviceRoleAction = useCallback(async (targetDeviceId, roleId) => {
-    const next = { ...devicesRef.current, [targetDeviceId]: { ...(devicesRef.current[targetDeviceId] || {}), role: roleId } };
-    setDevices(next);
-    safeSet('devices', next);
-    if (!window.firebaseReady) {
-      setDataWarning('Ruolo assegnato solo localmente (Firebase non disponibile).');
-      return false;
-    }
-    try {
-      const { db, ref, update } = window.FirebaseCassa;
-      await update(ref(db, 'cassa/devices/' + targetDeviceId), { role: roleId });
-      return true;
-    } catch (e) {
-      console.error('Firebase setDeviceRole:', e);
-      setDataWarning('Ruolo assegnato solo localmente, non ancora sincronizzato con Firebase.');
-      return false;
-    }
-  }, []);
-
-  // Rimuove la scheda del dispositivo dal registro (es. dispositivo dismesso).
-  // Non tocca l'etichetta scontrini live dell'altro dispositivo: quella la
-  // può cambiare solo il dispositivo stesso dalle sue Impostazioni.
-  const removeDeviceAction = useCallback(async (targetDeviceId) => {
-    const next = { ...devicesRef.current };
-    delete next[targetDeviceId];
-    setDevices(next);
-    safeSet('devices', next);
-    if (window.firebaseReady) {
-      try {
-        const { db, ref, remove } = window.FirebaseCassa;
-        await remove(ref(db, 'cassa/devices/' + targetDeviceId));
-      } catch (e) {
-        console.error('Firebase removeDevice:', e);
-        setDataWarning('Dispositivo rimosso solo localmente, non ancora sincronizzato con Firebase.');
-      }
-    }
-  }, []);
-
-  // ---------------- RUOLI (vista "Ruoli") ----------------
-  const saveRolesConfigRemote = useCallback(async (next) => {
-    const localOk = safeSet('roles-config', next);
-    if (!window.firebaseReady) return localOk;
-    try {
-      await window.FirebaseCassa.set(window.FirebaseCassa.ref(window.FirebaseCassa.db, 'cassa/rolesConfig'), next);
-      return true;
-    } catch (e) {
-      console.error('Firebase saveRolesConfig:', e);
-      setDataWarning('Ruoli salvati localmente, ma non sincronizzati con Firebase.');
-      return localOk;
-    }
-  }, []);
-
-  const addRole = useCallback(async (role) => {
-    const id = role.id || uid();
-    const next = { ...rolesConfigRef.current, [id]: { id, name: role.name || 'Nuovo ruolo', permissions: role.permissions || {} } };
-    setRolesConfig(next);
-    await saveRolesConfigRemote(next);
-  }, [saveRolesConfigRemote]);
-
-  const updateRole = useCallback(async (id, patch) => {
-    const current = rolesConfigRef.current[id];
-    if (!current) return;
-    const next = { ...rolesConfigRef.current, [id]: { ...current, ...patch, permissions: { ...current.permissions, ...(patch.permissions || {}) } } };
-    setRolesConfig(next);
-    await saveRolesConfigRemote(next);
-  }, [saveRolesConfigRemote]);
-
-  const deleteRole = useCallback(async (id) => {
-    if (id === 'admin') { flash('Il ruolo Amministratore non può essere eliminato.', true); return; }
-    const next = { ...rolesConfigRef.current };
-    delete next[id];
-    setRolesConfig(next);
-    await saveRolesConfigRemote(next);
-  }, [saveRolesConfigRemote, flash]);
-
-  // Ruolo del dispositivo corrente: se non ancora assegnato su Firebase,
-  // resta 'admin' (piena visibilità) per non rompere l'uso attuale finché
-  // l'amministratore non assegna esplicitamente un ruolo più limitato dalla
-  // vista Dispositivi.
-  const deviceRole = devices[getDeviceId()]?.role || 'admin';
-  const canAccessTab = useCallback((tabId) => {
-    const role = rolesConfig[deviceRole] || rolesConfig.admin;
-    if (!role || !role.permissions) return true;
-    return role.permissions[tabId] !== false;
-  }, [rolesConfig, deviceRole]);
-
   // ---------------- LOGIN ADMIN ----------------
   const login = useCallback((username, password) => {
     if (username === credsRef.current.username && password === credsRef.current.password) {
@@ -937,7 +773,7 @@ export function CassaProvider({ children }) {
     menu, order, ticketCounter, settings, creds, salesLog, cashFloat, cashAdditions,
     deviceId: getDeviceId(), deviceTag, firebaseReady, adminLoggedIn,
     flashState, dataWarning, categories, saleEditorSale,
-    printers, printerAssignments, devices, rolesConfig, deviceRole,
+    printers, printerAssignments,
 
     // helper puri
     dishSoldQty: (d) => dishSoldQty(salesLog, d),
@@ -947,7 +783,6 @@ export function CassaProvider({ children }) {
     aggregateSalesLog: () => aggregateSalesLog(salesLog),
     cashAdditionsTotal: () => cashAdditionsTotal(cashAdditions),
     getKitchenTicketsForLines: (lines) => getKitchenTicketsForLines(lines, menu, settings),
-    canAccessTab,
 
     // azioni
     flash, dismissWarning,
@@ -961,14 +796,11 @@ export function CassaProvider({ children }) {
     setDeviceTag: setDeviceTagAction, resetCounter,
     exportSettingsFile, importSettingsFromPayload,
     addPrinter, deletePrinter, savePrinterAssignments,
-    setDeviceRole: setDeviceRoleAction, removeDevice: removeDeviceAction,
-    addRole, updateRole, deleteRole,
     login, logout,
   }), [
     menu, order, ticketCounter, settings, creds, salesLog, cashFloat, cashAdditions,
-    printers, printerAssignments, devices, rolesConfig, deviceRole,
+    printers, printerAssignments,
     deviceTag, firebaseReady, adminLoggedIn, flashState, dataWarning, categories,
-    canAccessTab,
     flash, dismissWarning, addDish, updateDish, deleteDish, importMenu,
     addToOrder, changeQty, removeOrderLine, clearOrder, printOrder,
     getLatestEditableSale, saveEditedSale, setSaleVoided, printReceipt,
@@ -977,7 +809,6 @@ export function CassaProvider({ children }) {
     resetClose, printCloseSummary, saveSettingsAction, saveCredsAction,
     setDeviceTagAction, resetCounter, exportSettingsFile, importSettingsFromPayload,
     addPrinter, deletePrinter, savePrinterAssignments,
-    setDeviceRoleAction, removeDeviceAction, addRole, updateRole, deleteRole,
     login, logout,
   ]);
 

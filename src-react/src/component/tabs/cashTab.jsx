@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCassa } from '../../store/CassaContext';
 
-function CashTab({ isActive = true }) {
+function CashTab({ isActive }) {
     const { cashFloat, cashAdditions, cashAdditionsTotal, settings, saveCashFloat, addCashAddition, removeCashAddition } = useCassa();
 
     const [cashFloatAmount, setCashFloatAmount] = useState('');
